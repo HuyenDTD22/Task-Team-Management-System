@@ -56,10 +56,7 @@ Browser → Vite (:5173) → proxy /api → Spring Boot (:8080) → PostgreSQL (
 ## Getting Started (Local Development)
 
 ### Prerequisites
-- Java 21
-- Node.js 20+
-- Docker + Docker Compose
-- Maven 3.9+
+- Java 21 · Node.js 20+ · Docker + Docker Compose · Maven 3.9+
 
 ### 1. Start the database
 
@@ -67,61 +64,32 @@ Browser → Vite (:5173) → proxy /api → Spring Boot (:8080) → PostgreSQL (
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-This starts PostgreSQL only. Backend and frontend run locally.
+### 2. Configure backend
 
-### 2. Configure backend credentials
+Create `backend/src/main/resources/application-dev.yml` (gitignored) with your local credentials:
 
-```bash
-cd backend/src/main/resources
-cp application-dev.yml.example application-dev.yml
-# Edit application-dev.yml — fill in your DB password and Cloudinary credentials
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/taskmanager
+    username: postgres
+    password: <your-db-password>
+cloudinary:
+  cloud-name: <your-cloud-name>
+  api-key: <your-api-key>
+  api-secret: <your-api-secret>
 ```
 
-`application-dev.yml` is gitignored — never commit it.
-
-### 3. Run the backend
+### 3. Run
 
 ```bash
-cd backend
-mvn spring-boot:run
-# Runs on http://localhost:8080
-# Swagger UI: http://localhost:8080/swagger-ui.html
-```
+# Backend
+cd backend && mvn spring-boot:run
+# http://localhost:8080 · Swagger: http://localhost:8080/swagger-ui.html
 
-Flyway runs migrations automatically on startup.
-
-### 4. Run the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-# Runs on http://localhost:5173
-# Vite proxies /api/* → http://localhost:8080
-```
-
----
-
-## Environment Configuration
-
-### File responsibilities
-
-| File | Committed | Purpose |
-|------|-----------|---------|
-| `backend/src/main/resources/application.yml` | ✅ Yes | Base config, non-sensitive defaults |
-| `backend/src/main/resources/application-prod.yml` | ✅ Yes | Prod profile — reads from `${ENV_VAR}` only |
-| `backend/src/main/resources/application-dev.yml.example` | ✅ Yes | Template for local dev setup |
-| `backend/src/main/resources/application-dev.yml` | ❌ No | Your local credentials (gitignored) |
-| `.env.example` | ✅ Yes | Template for Docker production deployment |
-| `.env` | ❌ No | Real secrets for Docker deployment (gitignored) |
-| `docker-compose.dev.yml` | ✅ Yes | Local dev PostgreSQL (generic dev password) |
-
-### Production deployment
-
-```bash
-cp .env.example .env
-# Edit .env with real production values
-docker compose up -d
+# Frontend
+cd frontend && npm install && npm run dev
+# http://localhost:5173
 ```
 
 ---
@@ -130,36 +98,34 @@ docker compose up -d
 
 ```
 task-team-management-system/
-├── backend/                        # Spring Boot application
+├── backend/
 │   ├── src/main/java/com/taskmanager/
-│   │   ├── config/                 # Spring beans, security, Cloudinary
-│   │   ├── common/                 # BaseEntity, ApiResponse, PageResponse, enums
-│   │   ├── exception/              # GlobalExceptionHandler, ErrorCode, BusinessException
-│   │   ├── security/               # JwtService, UserPrincipal, SecurityUtil
+│   │   ├── config/         # Spring beans, security, Cloudinary
+│   │   ├── common/         # BaseEntity, ApiResponse, PageResponse, enums
+│   │   ├── exception/      # GlobalExceptionHandler, ErrorCode
+│   │   ├── security/       # JwtService, UserPrincipal, SecurityUtil
 │   │   └── domain/
-│   │       ├── auth/               # Login, register, refresh token
-│   │       ├── user/               # Profile, avatar upload
-│   │       ├── workspace/          # Workspace + member RBAC
-│   │       ├── project/            # Project + member RBAC
-│   │       ├── task/               # (Phase 3)
-│   │       └── comment/            # (Phase 3)
+│   │       ├── auth/       # Login, register, refresh token
+│   │       ├── user/       # Profile, avatar upload
+│   │       ├── workspace/  # Workspace + member RBAC
+│   │       ├── project/    # Project + member RBAC
+│   │       ├── task/       # (Phase 3)
+│   │       └── comment/    # (Phase 3)
 │   └── src/main/resources/
-│       ├── application.yml
-│       ├── application-prod.yml
-│       ├── application-dev.yml.example
-│       └── db/migration/           # Flyway SQL migrations V1–V5
-├── frontend/                       # React application
+│       ├── application.yml             # Base config
+│       ├── application-prod.yml        # Prod profile (${ENV_VAR} only)
+│       └── db/migration/               # Flyway SQL migrations
+├── frontend/
 │   └── src/
-│       ├── api/                    # Axios instance, query keys, endpoints
-│       ├── components/ui/          # Avatar, Spinner, Pagination
-│       ├── features/               # auth, user, workspace, project, dashboard
-│       ├── layouts/                # AppLayout (sidebar)
-│       ├── router/                 # Routes, ProtectedRoute
-│       ├── stores/                 # Zustand auth store
-│       └── types/                  # TypeScript type definitions
-├── docs/                           # Architecture, DB design, API guidelines
-├── docker-compose.dev.yml          # Local dev: PostgreSQL only
-├── .env.example                    # Template for production Docker deployment
+│       ├── api/            # Axios, query keys, endpoints
+│       ├── components/ui/  # Avatar, Spinner, Pagination
+│       ├── features/       # auth, user, workspace, project, dashboard
+│       ├── layouts/        # AppLayout
+│       ├── router/         # Routes, ProtectedRoute
+│       ├── stores/         # Zustand auth store
+│       └── types/          # TypeScript definitions
+├── docs/                   # Architecture, DB design, API guidelines
+├── docker-compose.dev.yml  # Local dev PostgreSQL
 └── README.md
 ```
 
@@ -175,9 +141,3 @@ task-team-management-system/
 | [PROJECT_GUIDELINE.md](docs/PROJECT_GUIDELINE.md) | Coding conventions, API standards, git workflow |
 | [FEATURE_ANALYSIS.md](docs/FEATURE_ANALYSIS.md) | Business analysis, user roles, permission matrix |
 | [DEVOPS_DEPLOYMENT_GUIDE.md](docs/DEVOPS_DEPLOYMENT_GUIDE.md) | EC2 setup, Docker deployment, Nginx config |
-
----
-
-## License
-
-MIT
