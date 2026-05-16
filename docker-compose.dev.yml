@@ -1,6 +1,7 @@
 # ─── Local development: PostgreSQL only ──────────────────────────────────────
 # Usage: docker compose -f docker-compose.dev.yml up -d
-# Backend and frontend run locally (mvn spring-boot:run / npm run dev)
+# Credentials are read from .env (gitignored) in the same directory.
+# Backend and frontend run locally (./mvnw spring-boot:run / npm run dev)
 
 services:
   postgres:
@@ -9,13 +10,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: taskmanager
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d taskmanager"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
