@@ -1,0 +1,26 @@
+# ─── Prod profile: all values MUST come from environment variables ───────────
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      pool-name: TaskManagerHikariPool-Prod
+
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+
+# Override base default — prod MUST set a real secret
+jwt:
+  secret: ${JWT_SECRET}
+
+logging:
+  level:
+    root: WARN
+    com.taskmanager: INFO
