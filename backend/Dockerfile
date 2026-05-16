@@ -1,13 +1,18 @@
 # ─── Stage 1: Build ──────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-21 AS builder
+FROM eclipse-temurin:21-jdk AS builder
 WORKDIR /app
+
+# Copy wrapper first so Maven download is cached as a separate layer
+COPY .mvn/ .mvn/
+COPY mvnw .
+RUN chmod +x mvnw
 
 # Cache dependencies layer separately from source — only re-downloads if pom.xml changes
 COPY pom.xml .
-RUN mvn dependency:go-offline -q
+RUN ./mvnw dependency:go-offline -q
 
 COPY src ./src
-RUN mvn package -DskipTests -q
+RUN ./mvnw package -DskipTests -q
 
 # ─── Stage 2: Runtime (minimal image) ────────────────────────────────────────
 FROM eclipse-temurin:21-jre-alpine
