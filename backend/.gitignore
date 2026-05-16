@@ -1,10 +1,22 @@
-HELP.md
+# ──────────────────────────────────────────────────────────────────────────────
+# Backend .gitignore
+# Rule: .example files → COMMIT (safe templates)
+#       actual credential files → NEVER COMMIT
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Maven build output ────────────────────────────────────────────────────────
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+HELP.md
 
-### STS ###
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
 .apt_generated
 .classpath
 .factorypath
@@ -12,26 +24,11 @@ target/
 .settings
 .springBeans
 .sts4-cache
-
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-
-### NetBeans ###
 /nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
-.vscode/
-
-### Sensitive config — never commit these ###
+# ── Sensitive Spring config — NEVER COMMIT ────────────────────────────────────
+# These files contain real credentials (DB password, API keys).
+# Copy application-dev.yml.example → application-dev.yml and fill in values.
 src/main/resources/application-dev.yml
 src/main/resources/application-local.yml

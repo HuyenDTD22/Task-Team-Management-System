@@ -1,29 +1,24 @@
-# Compiled class file
+# ──────────────────────────────────────────────────────────────────────────────
+# Root .gitignore
+# Rule of thumb:
+#   .example / .template files  → COMMIT  (safe templates, no real secrets)
+#   actual env / credential files → NEVER COMMIT
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── Java compiled output ──────────────────────────────────────────────────────
 *.class
-
-# Log file
 *.log
-
-# BlueJ files
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
 .mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
 *.nar
 *.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
 
-# Sensitive local config — never commit
-docker-compose.dev.yml
+# ── Secrets and local overrides — NEVER COMMIT ────────────────────────────────
+# The real .env with secrets (copy from .env.example and fill in values)
 .env
+# Any ad-hoc local yml overrides
 *.local.yml
