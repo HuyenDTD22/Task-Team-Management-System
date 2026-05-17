@@ -490,9 +490,10 @@ backend/src/main/resources/db/migration/
 ├── V3__add_avatar_public_id_to_users.sql    # Cloudinary public ID for avatar management
 ├── V4__create_workspaces_tables.sql
 ├── V5__create_projects_tables.sql
-├── V6__create_sprints_table.sql
-├── V7__create_tasks_tables.sql
-├── V8__create_comments_table.sql
+├── V6__create_tasks.sql                     # Phase 3: tasks + task_counter on projects (sprint FK added in Phase 4)
+├── V7__create_comments.sql                  # Phase 3: comments
+├── V8__add_comment_parent.sql               # Phase 3 polish: parent_id for one-level nested comments
+├── V9__create_sprints.sql                   # Phase 4: sprints + sprint FK on tasks
 ├── V9__create_labels_tables.sql
 ├── V10__create_attachments_table.sql
 └── V11__create_notifications_table.sql

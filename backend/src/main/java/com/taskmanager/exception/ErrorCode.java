@@ -44,7 +44,8 @@ public enum ErrorCode {
     INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST,     "TASK_003", "Invalid task status transition"),
 
     // --- Comment ---
-    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "CMT_001", "Comment not found"),
+    COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND,            "CMT_001", "Comment not found"),
+    INVALID_COMMENT_PARENT(HttpStatus.BAD_REQUEST,     "CMT_002", "Cannot reply to a reply. Only one level of nesting is allowed"),
 
     // --- File Upload ---
     UPLOAD_FILE_EMPTY(HttpStatus.BAD_REQUEST,           "FILE_001", "Uploaded file must not be empty"),

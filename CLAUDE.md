@@ -11,18 +11,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 0 — Foundation | Spring Boot skeleton, DB, Flyway, base classes | ✅ Done |
 | 1 — Auth & User | JWT auth, refresh token rotation, user profile, avatar (Cloudinary) | ✅ Done |
 | 2 — Workspace & Project | Workspace/project CRUD + member RBAC, full frontend | ✅ Done |
-| 3 — Task Management | Task CRUD, filtering, comments | 🔜 **Next** |
-| 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | Pending |
-| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI | Pending |
+| 3 — Task Management | Task CRUD, filtering, comments, RBAC polish (`My Tasks` deferred → Phase 5) | ✅ Done |
+| 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | 🔜 **Next** |
+| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | Pending |
 | 6 — Docker & Deploy | Dockerize, AWS EC2 | Pending |
 
-**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members). **Next**: V6 (tasks), V7 (comments).
+**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments). **Next**: V9 (sprints).
 
-**Current focus**: Implement Phase 3. Start with the `task/` domain: entity, repository, service, controller, DTOs. See `docs/PROJECT_ROADMAP.md` for endpoint list and `docs/DATABASE_DESIGN.md` for table schema.
+**Current focus**: Phase 4 — Sprint Management. Sprint lifecycle: `PLANNED → ACTIVE → COMPLETED`. Sprints belong to a project; tasks can be assigned to a sprint. See `docs/PROJECT_ROADMAP.md` for endpoint list.
 
 **Phase 2 refactoring completed**: Mapper bug fixed (role + joinedAt now returned in member responses), MapStruct multi-source methods replace manual builders, N+1 queries eliminated via JOIN FETCH + batch projections, pagination/filter/search added to workspace and project list endpoints, full frontend UI for edit/member management, URL-based filter state.
 
 **Phase 2 polish completed**: Project visibility bug fixed (MEMBER sees only their own projects), mutation cache invalidation gaps closed, polling-based permission sync added (staleTime:0 + refetchInterval 10–15s), 403 component-level handling in workspace/project detail pages, debounced controlled search inputs, UI typography/truncation fixes, pagination always-visible with page-size selector.
+
+**Phase 3 completed**: Task CRUD + Comment CRUD with full RBAC, task filters/pagination (URL-based state), task detail slide-over panel, inline title/description editing, assign/unassign via project member select, threaded comments (one level deep, `parent_id` on `comments` table V8), custom `ConfirmDialog` replacing all native `confirm()` calls, comment timestamps with time, `ConfirmDialog` UI consistent with existing modal pattern. **Not implemented in Phase 3**: `My Tasks` personal view — the `/tasks` sidebar item (`AppLayout.tsx`) is a `comingSoon: true` placeholder (non-clickable, no route registered, no backend endpoint). Deferred to Phase 5.
+
+**Phase 3 RBAC polish completed**: Field-level task permissions enforced in both backend and frontend. `getTaskPermissions()` utility (`features/task/utils/taskPermissions.ts`) computes per-field permissions from project role + assignee context. Backend `changeTaskStatus` restricted to MANAGER/wsAdmin/assignee only (was any DEVELOPER). `updateTask` now enforces planning-field vs. content-field split — assignees may only edit description; title/priority/dueDate/storyPoints are MANAGER+ only. `addComment` restricted to DEVELOPER+ (VIEWER read-only). Frontend: `canCreateTask`, `canDeleteTask`, `canEditTitle`, `canEditDescription`, `canChangeStatus`, `canAssignTask`, `canAddComment` all enforced with disabled selects, hidden buttons, and non-interactive elements.
 
 ---
 
@@ -200,6 +204,9 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `useProject(id)` | 0 | 15 000 ms |
 | `useProjectMembers(id)` | 0 | 10 000 ms |
 | `useMyWorkspaces(params)` | 0 | — (window focus only) |
+| `useProjectTasks(id, params)` | 0 | 15 000 ms |
+| `useTask(id)` | 0 | 15 000 ms |
+| `useTaskComments(taskId)` | 0 | 15 000 ms |
 
 **403 handling — component level only** — When a workspace or project data fetch returns 403, the component renders an "access revoked" message and calls `navigate('/workspaces')` after 2 seconds via `useEffect`. The Axios interceptor does NOT handle 403 globally because mutation 403s (e.g. "insufficient role" on a form submit) must show inline errors instead of redirecting. All 403s share `code: "CMN_001"` — use HTTP status 403 alone to detect access-revoked in `WorkspaceDetailPage` and `ProjectDetailPage`.
 
@@ -218,6 +225,14 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `archiveProject` | `setQueryData project.detail(id)` + `project.byWorkspace(workspaceId)` |
 | `addProjectMember` | `project.members(id)` + `project.detail(id)` |
 | `removeProjectMember` | `project.members(id)` + `project.detail(id)` |
+| `createTask` | `task.byProject(projectId)` |
+| `updateTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
+| `deleteTask` | `task.byProject(projectId)` |
+| `changeTaskStatus` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
+| `assignTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
+| `addComment` | `task.comments(taskId)` |
+| `updateComment` | `task.comments(taskId)` |
+| `deleteComment` | `task.comments(taskId)` |
 
 ---
 
@@ -234,6 +249,23 @@ Permission rules enforced in service layer:
 - Project mutations (update, archive, member management): project `MANAGER` OR workspace `ADMIN+`
 - Viewing workspace/project: any member
 - **Project visibility in list**: workspace `MEMBER` sees only projects they are explicitly a member of; workspace `ADMIN`/`OWNER` sees all. Enforced in `ProjectService.getWorkspaceProjects()` via `ProjectSpecification.memberOfUser(UUID)` — only applied when requester is not workspace ADMIN+.
+
+**Task RBAC matrix** (enforced in `TaskService` + `CommentService`; mirrored in frontend via `getTaskPermissions()`):
+
+| Action | VIEWER | DEVELOPER (non-assignee) | DEVELOPER (assignee) | MANAGER | wsADMIN/OWNER |
+|---|---|---|---|---|---|
+| View tasks/comments | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Create task | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Edit title | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Edit description | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Change status | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Assign/Unassign | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Delete task | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Add/Reply comment | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Edit own comment | ❌ | ✅ | ✅ | ✅ | ✅ |
+| Delete own comment | ❌ | ✅ | ✅ | ✅ | ✅ |
+
+Frontend utility: `src/features/task/utils/taskPermissions.ts` — `getTaskPermissions(role, assigneeId?, currentUserId?)` returns `TaskPerms` with one boolean per action/field. `role === null` = workspace admin with implicit full access.
 
 ---
 

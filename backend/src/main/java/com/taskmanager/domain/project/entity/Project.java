@@ -36,4 +36,9 @@ public class Project extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ProjectStatus status = ProjectStatus.ACTIVE;
+
+    // Monotonically increasing counter; used to generate task keys (e.g., PROJ-42).
+    // Incremented atomically via ProjectRepository.incrementTaskCounter() within a transaction.
+    @Column(name = "task_counter", nullable = false)
+    private int taskCounter = 0;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import type { AxiosError } from 'axios'
 import { useProject, useProjectMembers } from '@/features/project/hooks/useProjectQueries'
 import {
@@ -11,6 +11,8 @@ import {
 import { userApi } from '@/api/endpoints/user.api'
 import { Spinner } from '@/components/ui/Spinner'
 import { Avatar } from '@/components/ui/Avatar'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { TaskList } from '@/features/task'
 import type { ProjectRole } from '@/types/common.types'
 import type { UserResponse } from '@/types/auth.types'
 
@@ -227,9 +229,12 @@ function AddMemberModal({ projectId, onClose }: AddMemberModalProps) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+type Tab = 'tasks' | 'members'
+
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { data: project, isLoading, isError, error } = useProject(id!)
   const { data: members } = useProjectMembers(id!)
   const { mutate: archive, isPending: isArchiving } = useArchiveProject()
@@ -237,6 +242,14 @@ export function ProjectDetailPage() {
 
   const [showEdit, setShowEdit] = useState(false)
   const [showAddMember, setShowAddMember] = useState(false)
+  const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState<{ userId: string; name: string } | null>(null)
+
+  const activeTab = (searchParams.get('tab') as Tab) ?? 'tasks'
+
+  function setTab(tab: Tab) {
+    setSearchParams({ tab }, { replace: true })
+  }
 
   const is403 = isError && (error as AxiosError)?.response?.status === 403
   useEffect(() => {
@@ -291,6 +304,24 @@ export function ProjectDetailPage() {
       )}
       {showAddMember && (
         <AddMemberModal projectId={id!} onClose={() => setShowAddMember(false)} />
+      )}
+      {confirmArchive && (
+        <ConfirmDialog
+          title="Archive project"
+          message={`Archive "${project.name}"? It will become read-only.`}
+          confirmLabel="Archive"
+          onConfirm={() => archive(project.id)}
+          onClose={() => setConfirmArchive(false)}
+        />
+      )}
+      {confirmRemove && (
+        <ConfirmDialog
+          title="Remove member"
+          message={`Remove ${confirmRemove.name} from this project?`}
+          confirmLabel="Remove"
+          onConfirm={() => removeMember(confirmRemove.userId)}
+          onClose={() => setConfirmRemove(null)}
+        />
       )}
 
       {/* Header */}
@@ -347,10 +378,7 @@ export function ProjectDetailPage() {
               )}
               {canManage && project.status === 'ACTIVE' && (
                 <button
-                  onClick={() => {
-                    if (!confirm(`Archive project "${project.name}"?`)) return
-                    archive(project.id)
-                  }}
+                  onClick={() => setConfirmArchive(true)}
                   disabled={isArchiving}
                   className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
@@ -362,21 +390,36 @@ export function ProjectDetailPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="border-b border-slate-200 bg-white px-8">
+        <div className="mx-auto max-w-5xl">
+          <nav className="-mb-px flex gap-6">
+            {(['tasks', 'members'] as Tab[]).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setTab(tab)}
+                className={`border-b-2 pb-3 pt-1 text-sm font-medium capitalize transition ${
+                  activeTab === tab
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {tab === 'tasks' ? 'Tasks' : 'Members'}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
+
       {/* Content */}
       <div className="mx-auto max-w-5xl px-8 py-8 space-y-8">
-        {/* Kanban placeholder */}
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50">
-            <svg className="h-7 w-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125z" />
-            </svg>
-          </div>
-          <p className="font-medium text-slate-700">Kanban board</p>
-          <p className="mt-1 text-sm text-slate-500">Task management coming in Phase 3.</p>
-        </div>
+        {/* Tasks tab */}
+        {activeTab === 'tasks' && (
+          <TaskList projectId={id!} currentUserRole={project.currentUserRole} />
+        )}
 
-        {/* Members */}
-        <div>
+        {/* Members tab */}
+        {activeTab === 'members' && <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-semibold text-slate-900">
               Members{members ? ` (${members.length})` : ''}
@@ -432,10 +475,7 @@ export function ProjectDetailPage() {
                       {canManage && (
                         <td className="px-5 py-4 text-right">
                           <button
-                            onClick={() => {
-                              if (!confirm(`Remove ${m.fullName} from this project?`)) return
-                              removeMember(m.userId)
-                            }}
+                            onClick={() => setConfirmRemove({ userId: m.userId, name: m.fullName })}
                             className="text-xs font-medium text-red-500 transition hover:text-red-700"
                           >
                             Remove
@@ -448,7 +488,7 @@ export function ProjectDetailPage() {
               </table>
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   )

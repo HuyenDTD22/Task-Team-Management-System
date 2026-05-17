@@ -46,7 +46,14 @@ export interface ProjectFilterParams extends PageParams {
 
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE'
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export type SprintStatus = 'PLANNING' | 'ACTIVE' | 'COMPLETED'
+export type SprintStatus = 'PLANNED' | 'ACTIVE' | 'COMPLETED'
 export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 export type ProjectRole = 'MANAGER' | 'DEVELOPER' | 'VIEWER'
 export type SystemRole = 'ROLE_USER' | 'ROLE_ADMIN'
+
+export interface TaskFilterParams extends PageParams {
+  search?: string
+  status?: TaskStatus
+  priority?: TaskPriority
+  assigneeId?: string
+}

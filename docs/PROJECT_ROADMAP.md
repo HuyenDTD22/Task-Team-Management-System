@@ -205,8 +205,12 @@ DELETE /api/v1/projects/{id}/members/{userId}
 
 ---
 
-## Phase 3: Task Management Core
+## Phase 3: Task Management Core ✅ COMPLETED
 **Timeline**: Week 7-9 | **Priority**: CRITICAL | **Difficulty**: ⭐⭐⭐⭐
+
+**Completed**: Task CRUD + Comment CRUD, full RBAC, URL-based filter/pagination, task detail slide-over panel, assign/unassign, threaded comments (V8 parent_id), ConfirmDialog replacing native confirm(), comment timestamps with time.
+
+**RBAC polish completed**: Field-level task permissions enforced in backend (`TaskService`, `CommentService`) and frontend (`getTaskPermissions()` utility). `changeTaskStatus` restricted to MANAGER/wsAdmin/assignee. `updateTask` splits planning fields (title, priority, dueDate, storyPoints — MANAGER+ only) from content fields (description — assignee OK). `addComment` restricted to DEVELOPER+ (VIEWER read-only). Frontend gates Create Task, Delete, title edit, description edit, status select, assignee select, and comment form per role + assignee context.
 
 ### Mục tiêu
 Core business module — CRUD task đầy đủ với filtering, pagination, và permission checks.
