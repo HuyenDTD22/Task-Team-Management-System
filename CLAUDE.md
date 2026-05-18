@@ -12,13 +12,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 1 — Auth & User | JWT auth, refresh token rotation, user profile, avatar (Cloudinary) | ✅ Done |
 | 2 — Workspace & Project | Workspace/project CRUD + member RBAC, full frontend | ✅ Done |
 | 3 — Task Management | Task CRUD, filtering, comments, RBAC polish (`My Tasks` deferred → Phase 5) | ✅ Done |
-| 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | 🔜 **Next** |
-| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | Pending |
+| 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | ✅ Done |
+| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | 🔜 **Next** |
 | 6 — Docker & Deploy | Dockerize, AWS EC2 | Pending |
 
-**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments). **Next**: V9 (sprints).
+**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments) → V9 (sprints + tasks.sprint_id FK).
 
-**Current focus**: Phase 4 — Sprint Management. Sprint lifecycle: `PLANNED → ACTIVE → COMPLETED`. Sprints belong to a project; tasks can be assigned to a sprint. See `docs/PROJECT_ROADMAP.md` for endpoint list.
+**Current focus**: Phase 5 — Frontend (advanced). Kanban board, drag-and-drop, sprint board view, My Tasks personal view.
 
 **Phase 2 refactoring completed**: Mapper bug fixed (role + joinedAt now returned in member responses), MapStruct multi-source methods replace manual builders, N+1 queries eliminated via JOIN FETCH + batch projections, pagination/filter/search added to workspace and project list endpoints, full frontend UI for edit/member management, URL-based filter state.
 
@@ -27,6 +27,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Phase 3 completed**: Task CRUD + Comment CRUD with full RBAC, task filters/pagination (URL-based state), task detail slide-over panel, inline title/description editing, assign/unassign via project member select, threaded comments (one level deep, `parent_id` on `comments` table V8), custom `ConfirmDialog` replacing all native `confirm()` calls, comment timestamps with time, `ConfirmDialog` UI consistent with existing modal pattern. **Not implemented in Phase 3**: `My Tasks` personal view — the `/tasks` sidebar item (`AppLayout.tsx`) is a `comingSoon: true` placeholder (non-clickable, no route registered, no backend endpoint). Deferred to Phase 5.
 
 **Phase 3 RBAC polish completed**: Field-level task permissions enforced in both backend and frontend. `getTaskPermissions()` utility (`features/task/utils/taskPermissions.ts`) computes per-field permissions from project role + assignee context. Backend `changeTaskStatus` restricted to MANAGER/wsAdmin/assignee only (was any DEVELOPER). `updateTask` now enforces planning-field vs. content-field split — assignees may only edit description; title/priority/dueDate/storyPoints are MANAGER+ only. `addComment` restricted to DEVELOPER+ (VIEWER read-only). Frontend: `canCreateTask`, `canDeleteTask`, `canEditTitle`, `canEditDescription`, `canChangeStatus`, `canAssignTask`, `canAddComment` all enforced with disabled selects, hidden buttons, and non-interactive elements.
+
+**Phase 4 completed**: Sprint CRUD + lifecycle (PLANNED → ACTIVE → COMPLETED), sprint-task assignment, V9 migration (sprints table + tasks.sprint_id FK), SprintService with RBAC (MANAGER/wsAdmin only for mutations), `taskRepository.clearSprintFromIncompleteTasks()` on complete (DONE tasks keep sprintId for historical record), `taskRepository.clearAllSprintTasks()` on delete, partial unique index `uq_sprints_one_active_per_project` at DB level for concurrent safety. Frontend: Sprints tab in `ProjectDetailPage`, `SprintList` with accordion cards + inline Edit modal, Sprint field in `TaskDetailPanel` (single `useProjectSprints` fetch + fallback `useSprint`), `SprintStatusBadge`. `DataIntegrityViolationException` handler added to `GlobalExceptionHandler` for race-condition safety. Deferred to Phase 5: sprint board route, sprint selector in TaskFilters, backlog named section, velocity/burndown chart.
+
+**Phase 4 UX polish (post-testing)**: `TaskSummaryResponse` now includes `sprintId` so the task list table can show which sprint each task belongs to. Task list `TaskList.tsx` has a new Sprint column (sprint name or "Backlog"). Sprint dropdown in `TaskDetailPanel` now shows start/end dates alongside sprint name for easier selection. `SprintList` expanded cards now show a task count + top-5 task preview (`SprintTaskPreview` sub-component, fetches `useProjectTasks(sprintId, size:5)` on expand). Start/complete sprint errors replaced inline warning with modal `AlertDialog` overlay ("Only one active sprint is allowed"). RBAC bug fixed: `ProjectResponse` now includes `currentWorkspaceRole` so wsADMIN + project DEVELOPER correctly sees Sprint management buttons. `AlertDialog` component added to `components/ui/`. Sprint column fix: `TaskList` sprint name lookup was broken because `size: 50` exceeded backend `@Max(20)` on `SprintFilterParams`, causing 400 validation failure; fixed to `size: 20`. Sprint task preview now shows due date per task (format: "MMM d" or "No due date") and is sorted by due date descending (latest first, no due date last). Backend `TaskService.buildPageable()` updated to use `Sort.Order.nullsLast()` so that `ORDER BY due_date DESC NULLS LAST` is generated — previously PostgreSQL defaulted to `NULLS FIRST` for DESC, floating tasks without due dates to the top. **Phase 4 is stable and complete.**
 
 ---
 
@@ -207,6 +211,8 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `useProjectTasks(id, params)` | 0 | 15 000 ms |
 | `useTask(id)` | 0 | 15 000 ms |
 | `useTaskComments(taskId)` | 0 | 15 000 ms |
+| `useProjectSprints(id, params)` | 0 | 15 000 ms |
+| `useSprint(id)` | 0 | 15 000 ms |
 
 **403 handling — component level only** — When a workspace or project data fetch returns 403, the component renders an "access revoked" message and calls `navigate('/workspaces')` after 2 seconds via `useEffect`. The Axios interceptor does NOT handle 403 globally because mutation 403s (e.g. "insufficient role" on a form submit) must show inline errors instead of redirecting. All 403s share `code: "CMN_001"` — use HTTP status 403 alone to detect access-revoked in `WorkspaceDetailPage` and `ProjectDetailPage`.
 
@@ -233,6 +239,13 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `addComment` | `task.comments(taskId)` |
 | `updateComment` | `task.comments(taskId)` |
 | `deleteComment` | `task.comments(taskId)` |
+| `createSprint` | `sprint.byProject(projectId)` |
+| `updateSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` |
+| `deleteSprint` | `sprint.byProject(projectId)` |
+| `startSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` |
+| `completeSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` + **`task.all`** |
+| `addTaskToSprint` | `task.detail(taskId)` + `task.byProject(projectId)` |
+| `removeTaskFromSprint` | `task.detail(taskId)` + `task.byProject(projectId)` |
 
 ---
 
@@ -266,6 +279,8 @@ Permission rules enforced in service layer:
 | Delete own comment | ❌ | ✅ | ✅ | ✅ | ✅ |
 
 Frontend utility: `src/features/task/utils/taskPermissions.ts` — `getTaskPermissions(role, assigneeId?, currentUserId?)` returns `TaskPerms` with one boolean per action/field. `role === null` = workspace admin with implicit full access.
+
+**`ProjectResponse` includes both `currentUserRole` (project role) and `currentWorkspaceRole` (workspace role).** Use `currentWorkspaceRole` to compute `isWorkspaceAdmin` on the frontend (`OWNER` or `ADMIN`). `canManage` in `ProjectDetailPage` = `currentUserRole === 'MANAGER' || isWorkspaceAdmin`. This is required because a wsADMIN who is also a project DEVELOPER has `currentUserRole = 'DEVELOPER'` — checking only project role would incorrectly hide manager UI for them.
 
 ---
 

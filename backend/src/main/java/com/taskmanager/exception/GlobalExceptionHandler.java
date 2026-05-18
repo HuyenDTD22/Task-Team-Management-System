@@ -1,6 +1,7 @@
 package com.taskmanager.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -67,6 +68,30 @@ public class GlobalExceptionHandler {
                         .success(false)
                         .code(ErrorCode.VALIDATION_ERROR.getCode())
                         .message("Invalid value for parameter '" + ex.getName() + "'")
+                        .build());
+    }
+
+    // DB unique constraint violated — most likely uq_sprints_one_active_per_project
+    // (concurrent startSprint() requests that both pass the service-layer check)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        String message = ex.getMessage() != null ? ex.getMessage().toLowerCase() : "";
+        if (message.contains("uq_sprints_one_active_per_project")) {
+            return ResponseEntity
+                    .status(ErrorCode.SPRINT_ALREADY_ACTIVE.getHttpStatus())
+                    .body(ErrorResponse.builder()
+                            .success(false)
+                            .code(ErrorCode.SPRINT_ALREADY_ACTIVE.getCode())
+                            .message(ErrorCode.SPRINT_ALREADY_ACTIVE.getDefaultMessage())
+                            .build());
+        }
+        log.error("Data integrity violation: {}", ex.getMessage(), ex);
+        return ResponseEntity
+                .status(409)
+                .body(ErrorResponse.builder()
+                        .success(false)
+                        .code(ErrorCode.INTERNAL_SERVER_ERROR.getCode())
+                        .message("Data integrity constraint violated")
                         .build());
     }
 

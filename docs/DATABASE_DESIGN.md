@@ -280,38 +280,46 @@ CREATE INDEX idx_pm_user_id    ON project_members(user_id);
 
 ### 3.7 Table: `sprints`
 
+Added in V9 migration (`V9__create_sprints.sql`).
+
 ```sql
 CREATE TABLE sprints (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id      UUID NOT NULL,
     name            VARCHAR(100) NOT NULL,
     goal            TEXT,
-    status          VARCHAR(20)  NOT NULL DEFAULT 'PLANNED',
+    status          VARCHAR(20) NOT NULL DEFAULT 'PLANNED',
     start_date      DATE,
     end_date        DATE,
-    started_at      TIMESTAMP WITH TIME ZONE,
-    completed_at    TIMESTAMP WITH TIME ZONE,
     created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    created_by      UUID REFERENCES users(id),
+    created_by      UUID,
+    updated_by      UUID,
     deleted_at      TIMESTAMP WITH TIME ZONE,
 
     CONSTRAINT fk_sprints_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    CONSTRAINT chk_sprints_status CHECK (status IN ('PLANNED', 'ACTIVE', 'COMPLETED')),
-    CONSTRAINT chk_sprints_dates CHECK (end_date IS NULL OR start_date <= end_date)
+    CONSTRAINT chk_sprints_status CHECK (status IN ('PLANNED', 'ACTIVE', 'COMPLETED'))
 );
 
--- Chỉ 1 sprint ACTIVE per project tại một thời điểm
+-- DB-level guard: only 1 ACTIVE sprint per project (safety net for concurrent startSprint())
 CREATE UNIQUE INDEX uq_sprints_one_active_per_project
     ON sprints(project_id)
     WHERE status = 'ACTIVE' AND deleted_at IS NULL;
 
-CREATE INDEX idx_sprints_project_id ON sprints(project_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_sprints_project_id     ON sprints(project_id)         WHERE deleted_at IS NULL;
+CREATE INDEX idx_sprints_project_status ON sprints(project_id, status) WHERE deleted_at IS NULL;
+
+-- V9 also back-fills the FK from tasks (column exists since V6, constraint deferred to here)
+ALTER TABLE tasks
+    ADD CONSTRAINT fk_tasks_sprint
+    FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE SET NULL;
 ```
 
 **Notes:**
-- Partial unique index đảm bảo chỉ 1 sprint ACTIVE per project — enforced tại DB level
-- `started_at` và `completed_at` là timestamp chính xác (khác với `start_date` là ngày dự kiến)
+- `start_date`/`end_date` are `DATE` (planning dates, not timestamps)
+- Partial unique index enforces one-active-sprint-per-project at DB level — concurrent `startSprint()` calls that both pass the service-layer check will hit `DataIntegrityViolationException`, handled in `GlobalExceptionHandler`
+- Soft delete: `deleted_at` + `@SQLRestriction("deleted_at IS NULL")` on entity
+- `ON DELETE SET NULL` on tasks FK: if a sprint is hard-deleted (shouldn't happen with soft delete), tasks fall back to backlog safely
 
 ---
 

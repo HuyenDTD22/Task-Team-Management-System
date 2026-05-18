@@ -15,6 +15,7 @@ export interface TaskSummaryResponse {
   storyPoints: number | null
   dueDate: string | null
   projectId: string
+  sprintId: string | null
   assigneeId: string | null
   assigneeName: string | null
   assigneeAvatarUrl: string | null

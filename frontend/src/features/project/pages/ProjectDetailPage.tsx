@@ -13,6 +13,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { Avatar } from '@/components/ui/Avatar'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { TaskList } from '@/features/task'
+import { SprintList } from '@/features/sprint'
 import type { ProjectRole } from '@/types/common.types'
 import type { UserResponse } from '@/types/auth.types'
 
@@ -229,7 +230,7 @@ function AddMemberModal({ projectId, onClose }: AddMemberModalProps) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'tasks' | 'members'
+type Tab = 'tasks' | 'sprints' | 'members'
 
 export function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -288,9 +289,9 @@ export function ProjectDetailPage() {
     )
   }
 
-  // MANAGER role OR workspace admin (currentUserRole === null means workspace admin without project role)
-  const canManage =
-    project.currentUserRole === 'MANAGER' || project.currentUserRole === null
+  const isWorkspaceAdmin =
+    project.currentWorkspaceRole === 'OWNER' || project.currentWorkspaceRole === 'ADMIN'
+  const canManage = project.currentUserRole === 'MANAGER' || isWorkspaceAdmin
 
   return (
     <div className="min-h-full bg-slate-50">
@@ -394,7 +395,7 @@ export function ProjectDetailPage() {
       <div className="border-b border-slate-200 bg-white px-8">
         <div className="mx-auto max-w-5xl">
           <nav className="-mb-px flex gap-6">
-            {(['tasks', 'members'] as Tab[]).map((tab) => (
+            {(['tasks', 'sprints', 'members'] as Tab[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setTab(tab)}
@@ -404,7 +405,7 @@ export function ProjectDetailPage() {
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {tab === 'tasks' ? 'Tasks' : 'Members'}
+                {tab === 'tasks' ? 'Tasks' : tab === 'sprints' ? 'Sprints' : 'Members'}
               </button>
             ))}
           </nav>
@@ -415,7 +416,12 @@ export function ProjectDetailPage() {
       <div className="mx-auto max-w-5xl px-8 py-8 space-y-8">
         {/* Tasks tab */}
         {activeTab === 'tasks' && (
-          <TaskList projectId={id!} currentUserRole={project.currentUserRole} />
+          <TaskList projectId={id!} currentUserRole={project.currentUserRole} isWorkspaceAdmin={isWorkspaceAdmin} />
+        )}
+
+        {/* Sprints tab */}
+        {activeTab === 'sprints' && (
+          <SprintList projectId={id!} canManage={canManage} />
         )}
 
         {/* Members tab */}

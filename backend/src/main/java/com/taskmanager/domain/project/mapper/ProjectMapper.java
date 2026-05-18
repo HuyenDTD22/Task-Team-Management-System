@@ -1,6 +1,7 @@
 package com.taskmanager.domain.project.mapper;
 
 import com.taskmanager.common.enums.ProjectRole;
+import com.taskmanager.common.enums.WorkspaceRole;
 import com.taskmanager.domain.project.dto.ProjectMemberResponse;
 import com.taskmanager.domain.project.dto.ProjectResponse;
 import com.taskmanager.domain.project.dto.ProjectSummaryResponse;
@@ -28,13 +29,14 @@ public interface ProjectMapper {
     // Explicit @Mapping required where Project and Workspace share field names
     // (id, name, description, createdAt) to resolve ambiguity.
 
-    @Mapping(target = "id",            source = "project.id")
-    @Mapping(target = "name",          source = "project.name")
-    @Mapping(target = "description",   source = "project.description")
-    @Mapping(target = "createdAt",     source = "project.createdAt")
-    @Mapping(target = "workspaceId",   source = "workspace.id")
-    @Mapping(target = "workspaceName", source = "workspace.name")
-    ProjectResponse toResponse(Project project, Workspace workspace, ProjectRole currentUserRole, long memberCount);
+    @Mapping(target = "id",                   source = "project.id")
+    @Mapping(target = "name",                 source = "project.name")
+    @Mapping(target = "description",          source = "project.description")
+    @Mapping(target = "createdAt",            source = "project.createdAt")
+    @Mapping(target = "workspaceId",          source = "workspace.id")
+    @Mapping(target = "workspaceName",        source = "workspace.name")
+    @Mapping(target = "currentWorkspaceRole", source = "currentWorkspaceRole")
+    ProjectResponse toResponse(Project project, Workspace workspace, ProjectRole currentUserRole, WorkspaceRole currentWorkspaceRole, long memberCount);
 
     @Mapping(target = "id",     source = "project.id")
     @Mapping(target = "name",   source = "project.name")

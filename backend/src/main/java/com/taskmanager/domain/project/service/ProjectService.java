@@ -84,7 +84,7 @@ public class ProjectService {
 
         log.info("Project created: {} (key: {}) in workspace {} by user: {}",
                 project.getId(), request.getKey(), workspaceId, currentUserId);
-        return projectMapper.toResponse(project, workspace, ProjectRole.MANAGER, 1L);
+        return projectMapper.toResponse(project, workspace, ProjectRole.MANAGER, workspaceMembership.getRole(), 1L);
     }
 
     @Transactional(readOnly = true)
@@ -160,14 +160,15 @@ public class ProjectService {
         }
 
         ProjectRole effectiveRole = projectMembership.map(ProjectMember::getRole).orElse(null);
+        WorkspaceRole currentWorkspaceRole = workspaceMembership.getRole();
         long count = projectMemberRepository.countByProjectId(projectId);
-        return projectMapper.toResponse(project, workspace, effectiveRole, count);
+        return projectMapper.toResponse(project, workspace, effectiveRole, currentWorkspaceRole, count);
     }
 
     public ProjectResponse updateProject(UUID projectId, UpdateProjectRequest request) {
         UUID currentUserId = SecurityUtil.getCurrentUserId();
         Project project = findProjectOrThrow(projectId);
-        requireProjectManagerOrWorkspaceAdmin(projectId, project.getWorkspace().getId(), currentUserId);
+        WorkspaceRole currentWorkspaceRole = requireProjectManagerOrWorkspaceAdmin(projectId, project.getWorkspace().getId(), currentUserId);
 
         project.setName(request.getName());
         project.setDescription(request.getDescription());
@@ -176,13 +177,13 @@ public class ProjectService {
         Optional<ProjectMember> membership = projectMemberRepository.findByProjectIdAndUserId(projectId, currentUserId);
         long count = projectMemberRepository.countByProjectId(projectId);
         return projectMapper.toResponse(project, project.getWorkspace(),
-                membership.map(ProjectMember::getRole).orElse(null), count);
+                membership.map(ProjectMember::getRole).orElse(null), currentWorkspaceRole, count);
     }
 
     public ProjectResponse archiveProject(UUID projectId) {
         UUID currentUserId = SecurityUtil.getCurrentUserId();
         Project project = findProjectOrThrow(projectId);
-        requireProjectManagerOrWorkspaceAdmin(projectId, project.getWorkspace().getId(), currentUserId);
+        WorkspaceRole currentWorkspaceRole = requireProjectManagerOrWorkspaceAdmin(projectId, project.getWorkspace().getId(), currentUserId);
 
         project.setStatus(ProjectStatus.ARCHIVED);
         project = projectRepository.save(project);
@@ -191,7 +192,7 @@ public class ProjectService {
         Optional<ProjectMember> membership = projectMemberRepository.findByProjectIdAndUserId(projectId, currentUserId);
         long count = projectMemberRepository.countByProjectId(projectId);
         return projectMapper.toResponse(project, project.getWorkspace(),
-                membership.map(ProjectMember::getRole).orElse(null), count);
+                membership.map(ProjectMember::getRole).orElse(null), currentWorkspaceRole, count);
     }
 
     @Transactional(readOnly = true)
@@ -270,10 +271,10 @@ public class ProjectService {
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.PROJECT_NOT_FOUND));
     }
 
-    private void requireProjectManagerOrWorkspaceAdmin(UUID projectId, UUID workspaceId, UUID userId) {
+    private WorkspaceRole requireProjectManagerOrWorkspaceAdmin(UUID projectId, UUID workspaceId, UUID userId) {
         WorkspaceMember workspaceMembership = requireWorkspaceMembership(workspaceId, userId);
         if (workspaceMembership.getRole().isAtLeast(WorkspaceRole.ADMIN)) {
-            return;
+            return workspaceMembership.getRole();
         }
 
         ProjectMember projectMembership = projectMemberRepository
@@ -283,6 +284,7 @@ public class ProjectService {
         if (projectMembership.getRole() != ProjectRole.MANAGER) {
             throw new ForbiddenException("Only project MANAGER or workspace ADMIN/OWNER can perform this action");
         }
+        return workspaceMembership.getRole();
     }
 
     private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {

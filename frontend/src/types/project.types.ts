@@ -1,4 +1,4 @@
-import type { ProjectRole } from '@/types/common.types'
+import type { ProjectRole, WorkspaceRole } from '@/types/common.types'
 
 export interface ProjectResponse {
   id: string
@@ -9,6 +9,7 @@ export interface ProjectResponse {
   description: string | null
   status: 'ACTIVE' | 'ARCHIVED'
   currentUserRole: ProjectRole | null
+  currentWorkspaceRole: WorkspaceRole | null
   memberCount: number
   createdAt: string
 }

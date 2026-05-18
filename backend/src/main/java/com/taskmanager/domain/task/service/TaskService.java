@@ -113,6 +113,7 @@ public class TaskService {
                 .and(TaskSpecification.hasStatus(params.getStatus()))
                 .and(TaskSpecification.hasPriority(params.getPriority()))
                 .and(TaskSpecification.hasAssignee(params.getAssigneeId()))
+                .and(TaskSpecification.hasSprintId(params.getSprintId()))
                 .and(TaskSpecification.titleContains(params.getSearch()));
 
         Pageable pageable = buildPageable(params.getPage(), params.getSize(),
@@ -319,8 +320,10 @@ public class TaskService {
 
     private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {
         String field = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "createdAt";
-        Sort sort = Sort.by("asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC, field);
-        return PageRequest.of(page, size, sort);
+        Sort.Order order = "asc".equalsIgnoreCase(sortDir)
+                ? Sort.Order.asc(field).nullsLast()
+                : Sort.Order.desc(field).nullsLast();
+        return PageRequest.of(page, size, Sort.by(order));
     }
 
     // Builds TaskResponse from a task already loaded with all associations in memory.

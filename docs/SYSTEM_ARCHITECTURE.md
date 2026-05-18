@@ -442,10 +442,10 @@ frontend/
 │   │   ├── settings/
 │   │   │   └── pages/
 │   │   │       └── SettingsPage.tsx     # Change password form + danger zone placeholder
-│   │   ├── workspace/                   # Phase 2 — WorkspacesPage, WorkspaceDetailPage (RBAC, members, projects, pagination)
-│   │   ├── project/                     # Phase 2 — ProjectDetailPage (members, tasks placeholder, pagination)
-│   │   ├── task/                        # Phase 3 — not yet implemented
-│   │   └── sprint/                      # Phase 4 — not yet implemented
+│   │   │   ├── workspace/                   # Phase 2 — WorkspacesPage, WorkspaceDetailPage (RBAC, members, projects, pagination)
+│   │   ├── project/                     # Phase 2 — ProjectDetailPage (members tab, tasks tab, sprints tab)
+│   │   ├── task/                        # Phase 3 — TaskList, TaskDetailPanel, TaskFilters, TaskStatusBadge, TaskPriorityBadge, CommentSection
+│   │   └── sprint/                      # Phase 4 — SprintList, SprintStatusBadge, CreateSprintModal; hooks: useSprintQueries, useSprintMutations
 │   │
 │   ├── stores/
 │   │   └── authStore.ts                 # Zustand: user, isAuthenticated, isInitializing, updateUser
@@ -565,6 +565,11 @@ The global `QueryClient` in `App.tsx` has `staleTime: 5 minutes`. This is overri
 | `useProject(id)` | 0 | 15 s | Contains `currentUserRole` |
 | `useProjectMembers(id)` | 0 | 10 s | Role changes + removals |
 | `useMyWorkspaces(params)` | 0 | — | Window-focus only |
+| `useProjectTasks(id, params)` | 0 | 15 s | Task list, sprint filter |
+| `useTask(id)` | 0 | 15 s | Task detail panel |
+| `useTaskComments(taskId)` | 0 | 15 s | Comment section |
+| `useProjectSprints(id, params)` | 0 | 15 s | Sprint list + TaskDetailPanel sprint selector |
+| `useSprint(id)` | 0 | 15 s | Sprint detail (fallback in TaskDetailPanel) |
 
 `staleTime: 0` also re-enables TanStack Query's default `refetchOnWindowFocus`, so switching back to a browser tab immediately re-fetches stale data without waiting for the next polling tick. Max observed lag: ~15 seconds.
 

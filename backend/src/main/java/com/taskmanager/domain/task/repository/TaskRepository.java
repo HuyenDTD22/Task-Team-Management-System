@@ -23,4 +23,14 @@ public interface TaskRepository extends JpaRepository<Task, UUID>, JpaSpecificat
             WHERE t.id = :id
             """)
     Optional<Task> findByIdWithDetails(@Param("id") UUID id);
+
+    // Used in completeSprint() — moves only incomplete tasks to backlog; DONE tasks retain sprintId (historical)
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Task t SET t.sprintId = null WHERE t.sprintId = :sprintId AND t.status <> com.taskmanager.common.enums.TaskStatus.DONE")
+    int clearSprintFromIncompleteTasks(@Param("sprintId") UUID sprintId);
+
+    // Used in deleteSprint() — moves all tasks to backlog before soft-deleting a PLANNED sprint
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Task t SET t.sprintId = null WHERE t.sprintId = :sprintId")
+    int clearAllSprintTasks(@Param("sprintId") UUID sprintId);
 }

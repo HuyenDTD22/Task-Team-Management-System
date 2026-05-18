@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useProjectTasks } from '@/features/task/hooks/useTaskQueries'
 import { useDeleteTask } from '@/features/task/hooks/useTaskMutations'
 import { getTaskPermissions } from '@/features/task/utils/taskPermissions'
+import { useProjectSprints } from '@/features/sprint/hooks/useSprintQueries'
 import { TaskStatusBadge } from './TaskStatusBadge'
 import { TaskPriorityBadge } from './TaskPriorityBadge'
 import { TaskFilters } from './TaskFilters'
@@ -19,9 +20,10 @@ import type { ProjectRole, TaskFilterParams, TaskStatus, TaskPriority } from '@/
 interface Props {
   projectId: string
   currentUserRole: ProjectRole | null
+  isWorkspaceAdmin?: boolean
 }
 
-export function TaskList({ projectId, currentUserRole }: Readonly<Props>) {
+export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Readonly<Props>) {
   const [searchParams, setSearchParams] = useSearchParams()
   const currentUser = useAuthStore((s) => s.user)
   const [showCreate, setShowCreate] = useState(false)
@@ -74,6 +76,8 @@ export function TaskList({ projectId, currentUserRole }: Readonly<Props>) {
 
   const { data, isLoading } = useProjectTasks(projectId, params)
   const { mutate: deleteTask } = useDeleteTask(projectId)
+  const { data: sprintPage } = useProjectSprints(projectId, { size: 20 })
+  const sprintNameMap = new Map((sprintPage?.content ?? []).map((s) => [s.id, s.name]))
 
   const tasks         = data?.content ?? []
   const totalElements = data?.totalElements ?? 0
@@ -152,6 +156,7 @@ export function TaskList({ projectId, currentUserRole }: Readonly<Props>) {
         onClose={closePanel}
         currentUserId={currentUser?.id ?? ''}
         currentUserRole={currentUserRole}
+        isWorkspaceAdmin={isWorkspaceAdmin}
       />
 
       {/* Toolbar */}
@@ -206,6 +211,7 @@ export function TaskList({ projectId, currentUserRole }: Readonly<Props>) {
                 <th className="px-4 py-3.5 text-left font-medium text-slate-600">Priority</th>
                 <th className="px-4 py-3.5 text-left font-medium text-slate-600">Assignee</th>
                 <th className="px-4 py-3.5 text-left font-medium text-slate-600">Due</th>
+                <th className="px-4 py-3.5 text-left font-medium text-slate-600">Sprint</th>
                 {perms.canDeleteTask && (
                   <th className="px-4 py-3.5 text-right font-medium text-slate-600">Actions</th>
                 )}
@@ -244,6 +250,11 @@ export function TaskList({ projectId, currentUserRole }: Readonly<Props>) {
                     {t.dueDate
                       ? new Date(t.dueDate).toLocaleDateString()
                       : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    {t.sprintId
+                      ? <span className="text-slate-700">{sprintNameMap.get(t.sprintId) ?? '—'}</span>
+                      : <span className="text-slate-400">Backlog</span>}
                   </td>
                   {perms.canDeleteTask && (
                     <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>

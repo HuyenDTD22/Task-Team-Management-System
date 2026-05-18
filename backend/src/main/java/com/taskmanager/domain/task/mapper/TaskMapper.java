@@ -38,6 +38,7 @@ public interface TaskMapper {
     @Mapping(target = "storyPoints",     source = "task.storyPoints")
     @Mapping(target = "dueDate",         source = "task.dueDate")
     @Mapping(target = "projectId",       source = "task.projectId")
+    @Mapping(target = "sprintId",        source = "task.sprintId")
     @Mapping(target = "assigneeId",      source = "task.assigneeId")
     @Mapping(target = "assigneeName",    source = "assignee.fullName")
     @Mapping(target = "assigneeAvatarUrl", source = "assignee.avatarUrl")

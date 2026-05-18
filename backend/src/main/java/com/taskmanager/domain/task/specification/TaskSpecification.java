@@ -43,6 +43,13 @@ public final class TaskSpecification {
         };
     }
 
+    public static Specification<Task> hasSprintId(UUID sprintId) {
+        return (root, query, cb) -> {
+            if (sprintId == null) return cb.conjunction();
+            return cb.equal(root.get("sprintId"), sprintId);
+        };
+    }
+
     public static Specification<Task> isInBacklog() {
         return (root, query, cb) -> cb.isNull(root.get("sprintId"));
     }

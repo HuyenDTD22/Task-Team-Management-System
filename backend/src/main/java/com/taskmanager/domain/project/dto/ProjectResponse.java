@@ -2,6 +2,7 @@ package com.taskmanager.domain.project.dto;
 
 import com.taskmanager.common.enums.ProjectRole;
 import com.taskmanager.common.enums.ProjectStatus;
+import com.taskmanager.common.enums.WorkspaceRole;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -20,6 +21,7 @@ public class ProjectResponse {
     private final String description;
     private final ProjectStatus status;
     private final ProjectRole currentUserRole;
+    private final WorkspaceRole currentWorkspaceRole;
     private final long memberCount;
     private final Instant createdAt;
 }

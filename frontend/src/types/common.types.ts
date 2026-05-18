@@ -56,4 +56,9 @@ export interface TaskFilterParams extends PageParams {
   status?: TaskStatus
   priority?: TaskPriority
   assigneeId?: string
+  sprintId?: string
+}
+
+export interface SprintFilterParams extends PageParams {
+  status?: SprintStatus
 }

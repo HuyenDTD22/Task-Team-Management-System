@@ -22,6 +22,7 @@ public class TaskSummaryResponse {
     private final LocalDate dueDate;
 
     private final UUID projectId;
+    private final UUID sprintId;
 
     private final UUID assigneeId;
     private final String assigneeName;

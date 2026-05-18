@@ -24,6 +24,9 @@ public class TaskFilterParams {
     /** null = all assignees; provide a UUID to filter by specific assignee. */
     private UUID assigneeId;
 
+    /** null = all sprints; provide a UUID to filter tasks in a specific sprint. */
+    private UUID sprintId;
+
     /** Zero-based page index. */
     @Min(0)
     private int page = 0;

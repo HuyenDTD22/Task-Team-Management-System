@@ -12,6 +12,8 @@ import {
   useAssignTask,
 } from '@/features/task/hooks/useTaskMutations'
 import { useProjectMembers } from '@/features/project/hooks/useProjectQueries'
+import { useProjectSprints, useSprint } from '@/features/sprint/hooks/useSprintQueries'
+import { useAddTaskToSprint, useRemoveTaskFromSprint } from '@/features/sprint/hooks/useSprintMutations'
 import type { ProjectRole, TaskStatus, TaskPriority } from '@/types/common.types'
 
 interface Props {
@@ -20,14 +22,31 @@ interface Props {
   onClose: () => void
   currentUserId: string
   currentUserRole: ProjectRole | null
+  isWorkspaceAdmin?: boolean
 }
 
-export function TaskDetailPanel({ taskId, projectId, onClose, currentUserId, currentUserRole }: Readonly<Props>) {
+export function TaskDetailPanel({ taskId, projectId, onClose, currentUserId, currentUserRole, isWorkspaceAdmin }: Readonly<Props>) {
   const { data: task, isLoading, isError, error } = useTask(taskId ?? '', !!taskId)
   const { data: members } = useProjectMembers(projectId)
   const { mutate: changeStatus } = useChangeTaskStatus(taskId ?? '', projectId)
   const { mutate: updateTask, isPending: isSaving } = useUpdateTask(taskId ?? '', projectId)
   const { mutate: assignTask, isPending: isAssigning } = useAssignTask(taskId ?? '', projectId)
+
+  const { data: sprintPage } = useProjectSprints(projectId, { size: 20 })
+  const allSprints = sprintPage?.content ?? []
+  const currentSprint = allSprints.find((s) => s.id === task?.sprintId)
+  const { data: fallbackSprint } = useSprint(
+    task?.sprintId ?? '',
+    !!task?.sprintId && !currentSprint,
+  )
+  const displayedSprint = currentSprint ?? fallbackSprint
+
+  const { mutate: addToSprint, isPending: isAddingSprint, error: addSprintError } = useAddTaskToSprint(projectId)
+  const { mutate: removeFromSprint, isPending: isRemovingSprint, error: removeSprintError } = useRemoveTaskFromSprint(projectId)
+  const isChangingSprint = isAddingSprint || isRemovingSprint
+  const sprintChangeError = addSprintError ?? removeSprintError
+  type AxiosLike = { response?: { data?: { message?: string } } }
+  const sprintErrorMsg = (sprintChangeError as AxiosLike)?.response?.data?.message
 
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -228,6 +247,55 @@ export function TaskDetailPanel({ taskId, projectId, onClose, currentUserId, cur
                   <p className="mt-0.5 text-slate-700">
                     {task.storyPoints ?? <span className="text-slate-400">—</span>}
                   </p>
+                </div>
+
+                {/* Sprint — interactive selector for MANAGER/wsAdmin */}
+                <div className="col-span-2 sm:col-span-1">
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-400">Sprint</span>
+                  <div className="mt-1">
+                    {(perms.canAssignTask || !!isWorkspaceAdmin) ? (
+                      <select
+                        value={task.sprintId ?? ''}
+                        disabled={isChangingSprint}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (val === '') {
+                            if (task.sprintId) {
+                              removeFromSprint({ sprintId: task.sprintId, taskId: task.id })
+                            }
+                          } else {
+                            addToSprint({ sprintId: val, taskId: task.id })
+                          }
+                        }}
+                        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <option value="">— Backlog</option>
+                        {allSprints
+                          .filter((s) => s.status !== 'COMPLETED')
+                          .map((s) => {
+                            const fmt = (d: string | null) =>
+                              d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '?'
+                            const dates = s.startDate || s.endDate
+                              ? ` (${fmt(s.startDate)} – ${fmt(s.endDate)})`
+                              : ''
+                            return (
+                              <option key={s.id} value={s.id}>{s.name}{dates}</option>
+                            )
+                          })}
+                      </select>
+                    ) : (
+                      <p className="mt-0.5 text-slate-700">
+                        {displayedSprint
+                          ? displayedSprint.name
+                          : <span className="text-slate-400">— Backlog</span>}
+                      </p>
+                    )}
+                    {sprintChangeError && (
+                      <p className="mt-1 text-xs text-red-600">
+                        {sprintErrorMsg ?? 'Failed to update sprint.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

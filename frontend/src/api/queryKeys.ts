@@ -1,4 +1,4 @@
-import type { WorkspaceFilterParams, ProjectFilterParams, TaskFilterParams } from '@/types/common.types'
+import type { WorkspaceFilterParams, ProjectFilterParams, TaskFilterParams, SprintFilterParams } from '@/types/common.types'
 
 export const queryKeys = {
   currentUser: ['users', 'me'] as const,
@@ -25,5 +25,12 @@ export const queryKeys = {
       [...queryKeys.task.all, 'project', projectId, params ?? {}] as const,
     detail: (id: string) => [...queryKeys.task.all, id] as const,
     comments: (taskId: string) => [...queryKeys.task.all, taskId, 'comments'] as const,
+  },
+
+  sprint: {
+    all: ['sprints'] as const,
+    byProject: (projectId: string, params?: SprintFilterParams) =>
+      [...queryKeys.sprint.all, 'project', projectId, params ?? {}] as const,
+    detail: (id: string) => [...queryKeys.sprint.all, id] as const,
   },
 }
