@@ -334,8 +334,10 @@ DELETE /api/v1/sprints/{id}/tasks/{taskId}
 
 ---
 
-## Phase 5: Frontend Development
+## Phase 5: Frontend Development ✅ COMPLETED
 **Timeline**: Week 12-15 | **Priority**: HIGH | **Difficulty**: ⭐⭐⭐
+
+**Completed**: Kanban board ("Board" tab in `ProjectDetailPage`) with `@dnd-kit/core` + `@dnd-kit/sortable` drag-and-drop status change per RBAC (MANAGER/wsAdmin drag any card; DEVELOPER drags own cards only). Sprint selector + backlog filter in `TaskFilters`/`TaskList`. `BacklogSection` in Sprints tab with per-row "Add to Sprint" inline UI. "View Board" button on ACTIVE sprint cards. `MyTasksPage` at `/tasks` — cross-project assigned-task list with Project column, click opens task panel in project context. Backend: `GET /tasks/me` endpoint (`MyTaskSummaryResponse` with `projectName`), `isAccessibleByUser` JPA Specification, `backlog` filter in `TaskFilterParams`, `size` max relaxed to 100 for board view. `task.mine` query key integrated in cache invalidation matrix for all task/sprint mutations.
 
 ### Mục tiêu
 React frontend với Kanban board, connect tất cả API endpoints.
@@ -343,31 +345,31 @@ React frontend với Kanban board, connect tất cả API endpoints.
 ### Tasks
 
 #### 5.1 Foundation (Week 12)
-- [ ] Axios instance với JWT interceptor và auto-refresh
-- [ ] React Router với ProtectedRoute và PublicRoute
-- [ ] Auth store (Zustand hoặc Context)
-- [ ] Layout component (Sidebar + Header)
-- [ ] Login / Register pages
-- [ ] Toast notifications
+- [x] Axios instance với JWT interceptor và auto-refresh
+- [x] React Router với ProtectedRoute và PublicRoute
+- [x] Auth store (Zustand hoặc Context)
+- [x] Layout component (Sidebar + Header)
+- [x] Login / Register pages
 
 #### 5.2 Workspace & Project (Week 13)
-- [ ] Workspace list, create, detail pages
-- [ ] Project list, create pages
-- [ ] Member management UI
-- [ ] React Query hooks cho workspace/project APIs
+- [x] Workspace list, create, detail pages
+- [x] Project list, create pages
+- [x] Member management UI
+- [x] React Query hooks cho workspace/project APIs
 
 #### 5.3 Kanban Board (Week 14)
-- [ ] Kanban board component với columns (TODO, IN_PROGRESS, IN_REVIEW, DONE)
-- [ ] Task card component với priority badge, assignee avatar, due date
-- [ ] Task create/edit modal
-- [ ] Drag and drop status update (HTML5 DnD API hoặc @dnd-kit/core)
-- [ ] Task detail side panel với comments
+- [x] Kanban board component với columns (TODO, IN_PROGRESS, IN_REVIEW, DONE)
+- [x] Task card component với priority badge, assignee avatar, due date
+- [x] Task create/edit modal
+- [x] Drag and drop status update (`@dnd-kit/core`)
+- [x] Task detail side panel với comments
 
 #### 5.4 Sprint & Backlog (Week 15)
-- [ ] Backlog view (tasks không thuộc sprint)
-- [ ] Sprint list với active indicator
-- [ ] Start/complete sprint UI
-- [ ] Move task to sprint từ backlog
+- [x] Backlog view (tasks không thuộc sprint)
+- [x] Sprint list với active indicator
+- [x] Start/complete sprint UI
+- [x] Move task to sprint từ backlog
+- [x] My Tasks page (`/tasks`) — cross-project personal task view
 
 ### CV Talking Points
 *"Built responsive React frontend with TypeScript, TanStack Query for server state management, automatic JWT token refresh via Axios interceptors, and a Kanban board with drag-and-drop task management."*

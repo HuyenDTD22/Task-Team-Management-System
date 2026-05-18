@@ -68,6 +68,7 @@ export function useAddTaskToSprint(projectId: string) {
     onSuccess: (_data, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.task.detail(taskId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.task.byProject(projectId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.mine() })
     },
   })
 }
@@ -80,6 +81,7 @@ export function useRemoveTaskFromSprint(projectId: string) {
     onSuccess: (_data, { taskId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.task.detail(taskId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.task.byProject(projectId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.mine() })
     },
   })
 }

@@ -1,5 +1,24 @@
 import type { TaskStatus, TaskPriority } from '@/types/common.types'
 
+export interface MyTaskSummaryResponse {
+  id: string
+  taskKey: string
+  title: string
+  status: TaskStatus
+  priority: TaskPriority
+  storyPoints: number | null
+  dueDate: string | null
+  projectId: string
+  projectName: string
+  sprintId: string | null
+  assigneeId: string | null
+  assigneeName: string | null
+  assigneeAvatarUrl: string | null
+  reporterId: string
+  reporterName: string
+  createdAt: string
+}
+
 export interface UserSummary {
   id: string
   name: string

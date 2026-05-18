@@ -31,17 +31,17 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
 
   // ── URL param helpers ──────────────────────────────────────────────────────
 
-  const page     = Number(searchParams.get('page') ?? '0')
-  const size     = Number(searchParams.get('size') ?? '10')
-  const sortBy   = searchParams.get('sortBy') ?? 'createdAt'
-  const sortDir  = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
+  const page        = Number(searchParams.get('page') ?? '0')
+  const size        = Number(searchParams.get('size') ?? '10')
+  const sortBy      = searchParams.get('sortBy') ?? 'createdAt'
+  const sortDir     = (searchParams.get('sortDir') ?? 'desc') as 'asc' | 'desc'
   const statusParam   = searchParams.get('status') as TaskStatus | null
   const priorityParam = searchParams.get('priority') as TaskPriority | null
-  const taskId   = searchParams.get('taskId')
+  const sprintIdParam = searchParams.get('sprintId') ?? undefined
+  const backlogParam  = searchParams.get('backlog') === 'true'
+  const taskId      = searchParams.get('taskId')
 
   // ── Search: single write path via useEffect([debouncedSearch]) ─────────────
-  // searchInput state is the controlled value for the input.
-  // handleFilterChange never touches search — this eliminates the dual-write conflict.
 
   const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '')
   const debouncedSearch = useDebounce(searchInput, 300)
@@ -64,11 +64,12 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
     search:   searchParams.get('search') ?? undefined,
     status:   statusParam ?? undefined,
     priority: priorityParam ?? undefined,
+    sprintId: sprintIdParam,
+    backlog:  backlogParam || undefined,
     page, size, sortBy, sortDir,
   }
 
   // ── Permissions ────────────────────────────────────────────────────────────
-  // Role-level only — no assignee context needed at list level.
 
   const perms = getTaskPermissions(currentUserRole)
 
@@ -83,9 +84,7 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
   const totalElements = data?.totalElements ?? 0
   const totalPages    = data?.totalPages ?? 0
 
-  // ── Filter change handler (status/priority only — search is separate) ──────
-  // Always processes status and priority unconditionally so that selecting "All"
-  // (undefined value) correctly deletes the URL param.
+  // ── Filter change handler ──────────────────────────────────────────────────
 
   function handleFilterChange(p: TaskFilterParams) {
     setSearchParams((prev) => {
@@ -94,6 +93,10 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
       else            next.delete('status')
       if (p.priority) next.set('priority', p.priority)
       else            next.delete('priority')
+      if (p.sprintId) next.set('sprintId', p.sprintId)
+      else            next.delete('sprintId')
+      if (p.backlog)  next.set('backlog', 'true')
+      else            next.delete('backlog')
       next.set('page', '0')
       return next
     })
@@ -166,6 +169,8 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
           onSearchChange={setSearchInput}
           params={params}
           onChange={handleFilterChange}
+          sprints={sprintPage?.content}
+          showSprintFilter={true}
         />
         {perms.canCreateTask && (
           <button
@@ -192,7 +197,7 @@ export function TaskList({ projectId, currentUserRole, isWorkspaceAdmin }: Reado
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="font-medium text-slate-700">No tasks found</p>
           <p className="mt-1 text-sm text-slate-500">
-            {params.search || params.status || params.priority
+            {params.search || params.status || params.priority || params.sprintId || params.backlog
               ? 'Try adjusting your filters.'
               : 'Create your first task to get started.'}
           </p>

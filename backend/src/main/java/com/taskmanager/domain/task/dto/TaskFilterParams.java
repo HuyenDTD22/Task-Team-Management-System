@@ -27,12 +27,15 @@ public class TaskFilterParams {
     /** null = all sprints; provide a UUID to filter tasks in a specific sprint. */
     private UUID sprintId;
 
+    /** true = only return tasks with sprintId = null (backlog). Ignored when false. */
+    private boolean backlog = false;
+
     /** Zero-based page index. */
     @Min(0)
     private int page = 0;
 
-    /** Allowed values: 5–20. */
-    @Min(5) @Max(20)
+    /** Allowed values: 5–100. Upper bound 100 supports board view fetching all column tasks. */
+    @Min(5) @Max(100)
     private int size = 10;
 
     /** Sort field: title | status | priority | dueDate | createdAt | updatedAt. Defaults to createdAt. */

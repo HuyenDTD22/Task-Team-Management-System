@@ -23,6 +23,8 @@ export const queryKeys = {
     all: ['tasks'] as const,
     byProject: (projectId: string, params?: TaskFilterParams) =>
       [...queryKeys.task.all, 'project', projectId, params ?? {}] as const,
+    mine: (params?: TaskFilterParams) =>
+      [...queryKeys.task.all, 'mine', params ?? {}] as const,
     detail: (id: string) => [...queryKeys.task.all, id] as const,
     comments: (taskId: string) => [...queryKeys.task.all, taskId, 'comments'] as const,
   },

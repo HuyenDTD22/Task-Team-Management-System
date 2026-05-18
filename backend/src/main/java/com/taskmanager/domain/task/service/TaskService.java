@@ -113,7 +113,9 @@ public class TaskService {
                 .and(TaskSpecification.hasStatus(params.getStatus()))
                 .and(TaskSpecification.hasPriority(params.getPriority()))
                 .and(TaskSpecification.hasAssignee(params.getAssigneeId()))
-                .and(TaskSpecification.hasSprintId(params.getSprintId()))
+                .and(params.isBacklog()
+                        ? TaskSpecification.isInBacklog()
+                        : TaskSpecification.hasSprintId(params.getSprintId()))
                 .and(TaskSpecification.titleContains(params.getSearch()));
 
         Pageable pageable = buildPageable(params.getPage(), params.getSize(),
@@ -143,6 +145,72 @@ public class TaskService {
                         userMap.get(t.getAssigneeId()),
                         userMap.get(t.getReporterId())
                 ));
+
+        return PageResponse.from(responsePage);
+    }
+
+    // ─── My Tasks ────────────────────────────────────────────────────────────────
+
+    @Transactional(readOnly = true)
+    public PageResponse<MyTaskSummaryResponse> getMyTasks(TaskFilterParams params) {
+        UUID currentUserId = SecurityUtil.getCurrentUserId();
+
+        Specification<Task> spec = Specification
+                .where(TaskSpecification.hasAssignee(currentUserId))
+                .and(TaskSpecification.isAccessibleByUser(currentUserId))
+                .and(TaskSpecification.hasStatus(params.getStatus()))
+                .and(TaskSpecification.hasPriority(params.getPriority()))
+                .and(TaskSpecification.titleContains(params.getSearch()));
+
+        Pageable pageable = buildPageable(params.getPage(), params.getSize(),
+                params.getSortBy(), params.getSortDir());
+
+        Page<Task> taskPage = taskRepository.findAll(spec, pageable);
+
+        Set<UUID> assigneeIds = taskPage.getContent().stream()
+                .map(Task::getAssigneeId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<UUID> reporterIds = taskPage.getContent().stream()
+                .map(Task::getReporterId)
+                .collect(Collectors.toSet());
+
+        Set<UUID> allUserIds = Stream.concat(assigneeIds.stream(), reporterIds.stream())
+                .collect(Collectors.toSet());
+
+        Map<UUID, User> userMap = userRepository.findAllById(allUserIds).stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        Set<UUID> projectIds = taskPage.getContent().stream()
+                .map(Task::getProjectId)
+                .collect(Collectors.toSet());
+
+        Map<UUID, String> projectNameMap = projectRepository.findAllById(projectIds).stream()
+                .collect(Collectors.toMap(Project::getId, Project::getName));
+
+        Page<MyTaskSummaryResponse> responsePage = taskPage.map(t -> {
+            User assignee = userMap.get(t.getAssigneeId());
+            User reporter = userMap.get(t.getReporterId());
+            return MyTaskSummaryResponse.builder()
+                    .id(t.getId())
+                    .taskKey(t.getTaskKey())
+                    .title(t.getTitle())
+                    .status(t.getStatus())
+                    .priority(t.getPriority())
+                    .storyPoints(t.getStoryPoints())
+                    .dueDate(t.getDueDate())
+                    .projectId(t.getProjectId())
+                    .projectName(projectNameMap.getOrDefault(t.getProjectId(), "Unknown"))
+                    .sprintId(t.getSprintId())
+                    .assigneeId(t.getAssigneeId())
+                    .assigneeName(assignee != null ? assignee.getFullName() : null)
+                    .assigneeAvatarUrl(assignee != null ? assignee.getAvatarUrl() : null)
+                    .reporterId(t.getReporterId())
+                    .reporterName(reporter != null ? reporter.getFullName() : null)
+                    .createdAt(t.getCreatedAt())
+                    .build();
+        });
 
         return PageResponse.from(responsePage);
     }

@@ -2,7 +2,10 @@ package com.taskmanager.domain.task.specification;
 
 import com.taskmanager.common.enums.TaskPriority;
 import com.taskmanager.common.enums.TaskStatus;
+import com.taskmanager.domain.project.entity.ProjectMember;
 import com.taskmanager.domain.task.entity.Task;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.UUID;
@@ -52,5 +55,15 @@ public final class TaskSpecification {
 
     public static Specification<Task> isInBacklog() {
         return (root, query, cb) -> cb.isNull(root.get("sprintId"));
+    }
+
+    public static Specification<Task> isAccessibleByUser(UUID userId) {
+        return (root, query, cb) -> {
+            Subquery<UUID> sub = query.subquery(UUID.class);
+            Root<ProjectMember> pm = sub.from(ProjectMember.class);
+            sub.select(pm.get("project").get("id"))
+               .where(cb.equal(pm.get("user").get("id"), userId));
+            return root.get("projectId").in(sub);
+        };
     }
 }

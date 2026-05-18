@@ -30,6 +30,19 @@ export function useTask(id: string, enabled = true) {
   })
 }
 
+export function useMyTasks(params?: TaskFilterParams) {
+  return useQuery({
+    queryKey: queryKeys.task.mine(params),
+    queryFn: async () => {
+      const { data } = await taskApi.getMyTasks(params)
+      return data.data
+    },
+    placeholderData: (prev) => prev,
+    staleTime: 0,
+    refetchInterval: 15_000,
+  })
+}
+
 export function useTaskComments(
   taskId: string,
   params?: { page?: number; size?: number; sortDir?: string },

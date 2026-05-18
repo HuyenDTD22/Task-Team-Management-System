@@ -13,6 +13,7 @@ import {
 } from '@/features/sprint/hooks/useSprintMutations'
 import { useProjectTasks } from '@/features/task/hooks/useTaskQueries'
 import { TaskStatusBadge } from '@/features/task/components/TaskStatusBadge'
+import { BacklogSection } from '@/features/task/components/BacklogSection'
 import { SprintStatusBadge } from './SprintStatusBadge'
 import { CreateSprintModal } from './CreateSprintModal'
 import type { SprintStatus } from '@/types/common.types'
@@ -95,6 +96,7 @@ function SprintCard({
   canManage: boolean
   projectId: string
 }) {
+  const [, setSearchParams] = useSearchParams()
   const [expanded, setExpanded] = useState(false)
   const [confirmStart, setConfirmStart] = useState(false)
   const [confirmComplete, setConfirmComplete] = useState(false)
@@ -308,45 +310,60 @@ function SprintCard({
         </div>
 
         {/* Actions */}
-        {canManage && (
-          <div className="flex flex-shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {sprint.status === 'PLANNED' && (
-              <>
+        <div className="flex flex-shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          {sprint.status === 'ACTIVE' && (
+            <button
+              onClick={() =>
+                setSearchParams(
+                  { tab: 'board', sprintId: sprint.id },
+                  { replace: true },
+                )
+              }
+              className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-600 transition hover:bg-indigo-50"
+            >
+              View Board
+            </button>
+          )}
+          {canManage && (
+            <>
+              {sprint.status === 'PLANNED' && (
+                <>
+                  <button
+                    onClick={() => setConfirmStart(true)}
+                    disabled={isStarting}
+                    className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {isStarting && <Spinner size="sm" />}
+                    Start
+                  </button>
+                  <button
+                    onClick={openEdit}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => setConfirmDelete(true)}
+                    disabled={isDeleting}
+                    className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+              {sprint.status === 'ACTIVE' && (
                 <button
-                  onClick={() => setConfirmStart(true)}
-                  disabled={isStarting}
-                  className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+                  onClick={() => setConfirmComplete(true)}
+                  disabled={isCompleting}
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
                 >
-                  {isStarting && <Spinner size="sm" />}
-                  Start
+                  {isCompleting && <Spinner size="sm" />}
+                  Complete
                 </button>
-                <button
-                  onClick={openEdit}
-                  className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => setConfirmDelete(true)}
-                  disabled={isDeleting}
-                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              </>
-            )}
-            {sprint.status === 'ACTIVE' && (
-              <button
-                onClick={() => setConfirmComplete(true)}
-                disabled={isCompleting}
-                className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {isCompleting && <Spinner size="sm" />}
-                Complete
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </button>
 
       {/* Expanded section: goal + task preview */}
@@ -484,6 +501,8 @@ export function SprintList({ projectId, canManage }: Props) {
         onPageChange={setPage}
         onPageSizeChange={setSize}
       />
+
+      <BacklogSection projectId={projectId} canManage={canManage} sprints={sprints} />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import type { ApiResponse, PageResponse, TaskFilterParams } from '@/types/common
 import type {
   TaskResponse,
   TaskSummaryResponse,
+  MyTaskSummaryResponse,
   CommentResponse,
   CreateTaskRequest,
   UpdateTaskRequest,
@@ -23,6 +24,9 @@ export const taskApi = {
       `/projects/${projectId}/tasks`,
       { params },
     ),
+
+  getMyTasks: (params?: TaskFilterParams) =>
+    apiClient.get<ApiResponse<PageResponse<MyTaskSummaryResponse>>>('/tasks/me', { params }),
 
   getById: (id: string) =>
     apiClient.get<ApiResponse<TaskResponse>>(`/tasks/${id}`),

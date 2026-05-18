@@ -57,6 +57,7 @@ export interface TaskFilterParams extends PageParams {
   priority?: TaskPriority
   assigneeId?: string
   sprintId?: string
+  backlog?: boolean
 }
 
 export interface SprintFilterParams extends PageParams {

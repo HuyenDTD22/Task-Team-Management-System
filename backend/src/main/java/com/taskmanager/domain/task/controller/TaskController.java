@@ -2,6 +2,7 @@ package com.taskmanager.domain.task.controller;
 
 import com.taskmanager.common.constants.ApiPaths;
 import com.taskmanager.common.response.ApiResponse;
+import com.taskmanager.common.response.PageResponse;
 import com.taskmanager.domain.task.dto.*;
 import com.taskmanager.domain.task.service.TaskService;
 import jakarta.validation.Valid;
@@ -17,6 +18,12 @@ import java.util.UUID;
 public class TaskController {
 
     private final TaskService taskService;
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<PageResponse<MyTaskSummaryResponse>>> getMyTasks(
+            @ModelAttribute @Valid TaskFilterParams params) {
+        return ResponseEntity.ok(ApiResponse.success(taskService.getMyTasks(params)));
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<TaskResponse>> getTask(@PathVariable UUID id) {

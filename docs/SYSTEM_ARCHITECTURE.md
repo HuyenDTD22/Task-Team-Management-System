@@ -478,7 +478,8 @@ frontend/
 | `/dashboard` | `DashboardPage` | Protected |
 | `/workspaces` | `WorkspacesPage` | Protected |
 | `/workspaces/:id` | `WorkspaceDetailPage` | Protected |
-| `/projects/:id` | `ProjectDetailPage` | Protected |
+| `/projects/:id` | `ProjectDetailPage` (tabs: Tasks \| Board \| Sprints \| Members) | Protected |
+| `/tasks` | `MyTasksPage` (cross-project assigned tasks) | Protected |
 | `/profile` | `ProfilePage` | Protected |
 | `/profile/edit` | `EditProfilePage` | Protected |
 | `/settings` | `SettingsPage` | Protected |
@@ -486,7 +487,7 @@ frontend/
 
 Protected routes are wrapped in `ProtectedRoute → AppLayout`. `ProtectedRoute` checks Zustand auth state, shows a spinner during JWT initialization, then redirects to `/login` if unauthenticated.
 
-### 4.4 Backend API Endpoints (Phase 1 & 2)
+### 4.4 Backend API Endpoints (Phases 1–5)
 
 | Method | Path | Response | Notes |
 |--------|------|----------|-------|
@@ -516,6 +517,28 @@ Protected routes are wrapped in `ProtectedRoute → AppLayout`. `ProtectedRoute`
 | GET | `/api/v1/projects/:id/members` | `List<ProjectMemberResponse>` | |
 | POST | `/api/v1/projects/:id/members` | `ProjectMemberResponse` | MANAGER or workspace ADMIN+ |
 | DELETE | `/api/v1/projects/:id/members/:userId` | void | MANAGER or workspace ADMIN+ |
+| GET | `/api/v1/projects/:id/tasks` | `PageResponse<TaskSummaryResponse>` | `?status&priority&sprintId&backlog&search&sortBy&sortDir&page&size` |
+| POST | `/api/v1/projects/:id/tasks` | `TaskResponse` | DEVELOPER+ |
+| GET | `/api/v1/tasks/:id` | `TaskResponse` | |
+| PUT | `/api/v1/tasks/:id` | `TaskResponse` | MANAGER+ or assignee (description only) |
+| DELETE | `/api/v1/tasks/:id` | void | MANAGER+ |
+| PATCH | `/api/v1/tasks/:id/status` | `TaskResponse` | MANAGER+ or assignee |
+| PATCH | `/api/v1/tasks/:id/assignee` | `TaskResponse` | MANAGER+ |
+| PATCH | `/api/v1/tasks/:id/sprint` | `TaskResponse` | MANAGER+ |
+| GET | `/api/v1/tasks/me` | `PageResponse<MyTaskSummaryResponse>` | Tasks assigned to current user across all projects |
+| POST | `/api/v1/tasks/:id/comments` | `CommentResponse` | DEVELOPER+ |
+| GET | `/api/v1/tasks/:id/comments` | `PageResponse<CommentResponse>` | |
+| PUT | `/api/v1/comments/:id` | `CommentResponse` | Author only |
+| DELETE | `/api/v1/comments/:id` | void | Author or MANAGER+ |
+| GET | `/api/v1/projects/:id/sprints` | `PageResponse<SprintSummaryResponse>` | `?status&page&size` |
+| POST | `/api/v1/projects/:id/sprints` | `SprintResponse` | MANAGER+ |
+| GET | `/api/v1/sprints/:id` | `SprintResponse` | |
+| PUT | `/api/v1/sprints/:id` | `SprintResponse` | MANAGER+ |
+| DELETE | `/api/v1/sprints/:id` | void | MANAGER+ |
+| POST | `/api/v1/sprints/:id/start` | `SprintResponse` | MANAGER+ |
+| POST | `/api/v1/sprints/:id/complete` | `SprintResponse` | MANAGER+ |
+| POST | `/api/v1/sprints/:id/tasks/:taskId` | void | MANAGER+ (add task to sprint) |
+| DELETE | `/api/v1/sprints/:id/tasks/:taskId` | void | MANAGER+ (remove task from sprint) |
 
 ### 4.5 API Call Pattern
 

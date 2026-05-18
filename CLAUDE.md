@@ -13,12 +13,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 2 — Workspace & Project | Workspace/project CRUD + member RBAC, full frontend | ✅ Done |
 | 3 — Task Management | Task CRUD, filtering, comments, RBAC polish (`My Tasks` deferred → Phase 5) | ✅ Done |
 | 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | ✅ Done |
-| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | 🔜 **Next** |
-| 6 — Docker & Deploy | Dockerize, AWS EC2 | Pending |
+| 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | ✅ Done |
+| 6 — Docker & Deploy | Dockerize, AWS EC2 | 🔜 **Next** |
 
 **DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments) → V9 (sprints + tasks.sprint_id FK).
 
-**Current focus**: Phase 5 — Frontend (advanced). Kanban board, drag-and-drop, sprint board view, My Tasks personal view.
+**Current focus**: Phase 6 — Docker & Deployment.
+
+**Phase 5 completed**: Kanban board ("Board" tab in `ProjectDetailPage`) with `@dnd-kit` drag-and-drop status change, sprint selector and backlog filter in `TaskFilters`/`TaskList`, `BacklogSection` in Sprints tab with inline "Add to Sprint" per task, "View Board" button on ACTIVE sprint cards (routes to Board tab pre-filtered to that sprint), `GET /tasks/me` backend endpoint with `MyTaskSummaryResponse` (includes `projectName`), `MyTasksPage` at `/tasks` (cross-project assigned tasks, inline `TaskDetailPanel` overlay with per-task `useProject` role fetch), `isAccessibleByUser` JPA Specification for the `getMyTasks` query, `useChangeAnyTaskStatus` mutation hook for board DnD, `task.mine` query key added to cache invalidation matrix for all task/sprint mutations. `TaskFilterParams.size` max relaxed from 20 → 100 to support board `size=100` fetch. No new DB migrations needed.
+
+**Phase 5 post-testing fixes**: Two bugs fixed after manual testing. (1) `MyTasksPage` previously used `navigate('/projects/:id?taskId=...')` which left the user on `ProjectDetailPage` after closing the panel; fixed by rendering `TaskDetailPanel` inline on `/tasks` using `taskId`+`taskProjectId` URL params and `useProject(taskProjectId)` to derive the correct role per task. (2) Sidebar `NAV_PLANNING` section ("Sprint Board", "Kanban" both `comingSoon: true`) was misleading users into thinking boards were not implemented; removed the entire section from `AppLayout` since boards are project-scoped and accessed via the Board tab inside a project. No backend changes.
 
 **Phase 2 refactoring completed**: Mapper bug fixed (role + joinedAt now returned in member responses), MapStruct multi-source methods replace manual builders, N+1 queries eliminated via JOIN FETCH + batch projections, pagination/filter/search added to workspace and project list endpoints, full frontend UI for edit/member management, URL-based filter state.
 
@@ -213,6 +217,7 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `useTaskComments(taskId)` | 0 | 15 000 ms |
 | `useProjectSprints(id, params)` | 0 | 15 000 ms |
 | `useSprint(id)` | 0 | 15 000 ms |
+| `useMyTasks(params)` | 0 | 15 000 ms |
 
 **403 handling — component level only** — When a workspace or project data fetch returns 403, the component renders an "access revoked" message and calls `navigate('/workspaces')` after 2 seconds via `useEffect`. The Axios interceptor does NOT handle 403 globally because mutation 403s (e.g. "insufficient role" on a form submit) must show inline errors instead of redirecting. All 403s share `code: "CMN_001"` — use HTTP status 403 alone to detect access-revoked in `WorkspaceDetailPage` and `ProjectDetailPage`.
 
@@ -231,11 +236,12 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `archiveProject` | `setQueryData project.detail(id)` + `project.byWorkspace(workspaceId)` |
 | `addProjectMember` | `project.members(id)` + `project.detail(id)` |
 | `removeProjectMember` | `project.members(id)` + `project.detail(id)` |
-| `createTask` | `task.byProject(projectId)` |
-| `updateTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
-| `deleteTask` | `task.byProject(projectId)` |
-| `changeTaskStatus` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
-| `assignTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` |
+| `createTask` | `task.byProject(projectId)` + `task.mine()` |
+| `updateTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` + `task.mine()` |
+| `deleteTask` | `task.byProject(projectId)` + `task.mine()` |
+| `changeTaskStatus` | `setQueryData task.detail(id)` + `task.byProject(projectId)` + `task.mine()` |
+| `changeAnyTaskStatus` (Kanban DnD) | `setQueryData task.detail(id)` + `task.byProject(projectId)` + `task.mine()` |
+| `assignTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` + `task.mine()` |
 | `addComment` | `task.comments(taskId)` |
 | `updateComment` | `task.comments(taskId)` |
 | `deleteComment` | `task.comments(taskId)` |
@@ -244,8 +250,8 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `deleteSprint` | `sprint.byProject(projectId)` |
 | `startSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` |
 | `completeSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` + **`task.all`** |
-| `addTaskToSprint` | `task.detail(taskId)` + `task.byProject(projectId)` |
-| `removeTaskFromSprint` | `task.detail(taskId)` + `task.byProject(projectId)` |
+| `addTaskToSprint` | `task.detail(taskId)` + `task.byProject(projectId)` + `task.mine()` |
+| `removeTaskFromSprint` | `task.detail(taskId)` + `task.byProject(projectId)` + `task.mine()` |
 
 ---
 
