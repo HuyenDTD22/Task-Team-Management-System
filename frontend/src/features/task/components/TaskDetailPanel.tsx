@@ -218,6 +218,9 @@ export function TaskDetailPanel({ taskId, projectId, onClose, currentUserId, cur
                       className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm text-slate-700 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="">Unassigned</option>
+                      {task.assignee && !(members ?? []).some(m => m.userId === task.assignee!.id) && (
+                        <option value={task.assignee.id}>{task.assignee.name}</option>
+                      )}
                       {(members ?? []).map((m) => (
                         <option key={m.userId} value={m.userId}>
                           {m.fullName}

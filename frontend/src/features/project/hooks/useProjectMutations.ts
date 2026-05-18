@@ -59,6 +59,8 @@ export function useRemoveProjectMember(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.project.members(projectId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.byProject(projectId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.mine() })
     },
   })
 }

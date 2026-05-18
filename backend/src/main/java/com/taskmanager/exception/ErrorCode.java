@@ -24,6 +24,7 @@ public enum ErrorCode {
     WORKSPACE_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND,            "WS_002", "Workspace member not found"),
     WORKSPACE_MEMBER_ALREADY_EXISTS(HttpStatus.CONFLICT,        "WS_003", "User is already a workspace member"),
     CANNOT_REMOVE_OWNER(HttpStatus.BAD_REQUEST,                 "WS_004", "Cannot remove workspace owner. Transfer ownership first"),
+    CANNOT_REMOVE_LAST_MANAGER_FROM_WORKSPACE(HttpStatus.CONFLICT, "WS_005", "Cannot remove member: they are the last MANAGER of one or more projects in this workspace. Assign another MANAGER first"),
 
     // --- Project ---
     PROJECT_NOT_FOUND(HttpStatus.NOT_FOUND,                  "PROJ_001", "Project not found"),
@@ -42,6 +43,9 @@ public enum ErrorCode {
     TASK_NOT_FOUND(HttpStatus.NOT_FOUND,                  "TASK_001", "Task not found"),
     TASK_NOT_IN_PROJECT(HttpStatus.BAD_REQUEST,           "TASK_002", "Task does not belong to this project"),
     INVALID_STATUS_TRANSITION(HttpStatus.BAD_REQUEST,     "TASK_003", "Invalid task status transition"),
+
+    // --- Notification ---
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIF_001", "Notification not found"),
 
     // --- Comment ---
     COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND,            "CMT_001", "Comment not found"),

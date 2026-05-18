@@ -11,5 +11,6 @@ public final class ApiPaths {
     public static final String PROJECTS   = API_V1 + "/projects";
     public static final String SPRINTS    = API_V1 + "/sprints";
     public static final String TASKS      = API_V1 + "/tasks";
-    public static final String COMMENTS   = API_V1 + "/comments";
+    public static final String COMMENTS       = API_V1 + "/comments";
+    public static final String NOTIFICATIONS  = API_V1 + "/notifications";
 }

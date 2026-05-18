@@ -1,5 +1,5 @@
 import { apiClient } from '@/api/axios'
-import type { ApiResponse } from '@/types/common.types'
+import type { ApiResponse, UserStatsResponse } from '@/types/common.types'
 import type { UserResponse } from '@/types/auth.types'
 
 export const userApi = {
@@ -20,4 +20,7 @@ export const userApi = {
     form.append('file', file)
     return apiClient.patch<ApiResponse<UserResponse>>('/users/me/avatar', form)
   },
+
+  getMyStats: () =>
+    apiClient.get<ApiResponse<UserStatsResponse>>('/users/me/stats'),
 }

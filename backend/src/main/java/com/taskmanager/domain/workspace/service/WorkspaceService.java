@@ -1,7 +1,12 @@
 package com.taskmanager.domain.workspace.service;
 
+import com.taskmanager.common.enums.NotificationEntityType;
+import com.taskmanager.common.enums.NotificationType;
 import com.taskmanager.common.enums.WorkspaceRole;
 import com.taskmanager.common.response.PageResponse;
+import com.taskmanager.domain.notification.service.NotificationService;
+import com.taskmanager.domain.project.repository.ProjectMemberRepository;
+import com.taskmanager.domain.task.repository.TaskRepository;
 import com.taskmanager.domain.user.entity.User;
 import com.taskmanager.domain.user.repository.UserRepository;
 import com.taskmanager.domain.workspace.dto.*;
@@ -40,6 +45,9 @@ public class WorkspaceService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final WorkspaceMapper workspaceMapper;
+    private final NotificationService notificationService;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final TaskRepository taskRepository;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("name", "createdAt", "updatedAt");
 
@@ -199,6 +207,20 @@ public class WorkspaceService {
 
         log.info("Member {} added to workspace {} with role {} by user: {}",
                 request.getUserId(), workspaceId, request.getRole(), currentUserId);
+
+        try {
+            notificationService.createNotification(
+                    request.getUserId(),
+                    NotificationType.WORKSPACE_MEMBER_ADDED,
+                    "You have been added to a workspace",
+                    "You are now a " + request.getRole().name() + " in workspace: " + workspace.getName(),
+                    NotificationEntityType.WORKSPACE,
+                    workspaceId);
+        } catch (Exception ex) {
+            log.warn("Failed to create WORKSPACE_MEMBER_ADDED notification for user {} in workspace {}: {}",
+                    request.getUserId(), workspaceId, ex.getMessage());
+        }
+
         return workspaceMapper.toMemberResponse(member);
     }
 
@@ -246,6 +268,12 @@ public class WorkspaceService {
             throw new ConflictException(ErrorCode.CANNOT_REMOVE_OWNER);
         }
 
+        if (projectMemberRepository.countProjectsWhereUserIsLastManager(targetUserId, workspaceId) > 0) {
+            throw new ConflictException(ErrorCode.CANNOT_REMOVE_LAST_MANAGER_FROM_WORKSPACE);
+        }
+
+        taskRepository.unassignUserFromWorkspaceTasks(targetUserId, workspaceId);
+        projectMemberRepository.deleteByUserIdAndWorkspaceId(targetUserId, workspaceId);
         workspaceMemberRepository.deleteByWorkspaceIdAndUserId(workspaceId, targetUserId);
         log.info("Member {} removed from workspace {} by user: {}", targetUserId, workspaceId, currentUserId);
     }

@@ -1,4 +1,4 @@
-import type { WorkspaceFilterParams, ProjectFilterParams, TaskFilterParams, SprintFilterParams } from '@/types/common.types'
+import type { WorkspaceFilterParams, ProjectFilterParams, TaskFilterParams, SprintFilterParams, NotificationFilterParams } from '@/types/common.types'
 
 export const queryKeys = {
   currentUser: ['users', 'me'] as const,
@@ -35,4 +35,13 @@ export const queryKeys = {
       [...queryKeys.sprint.all, 'project', projectId, params ?? {}] as const,
     detail: (id: string) => [...queryKeys.sprint.all, id] as const,
   },
+
+  notification: {
+    all: ['notifications'] as const,
+    lists: (params?: NotificationFilterParams) =>
+      [...queryKeys.notification.all, 'list', params ?? {}] as const,
+    unreadCount: () => [...queryKeys.notification.all, 'unread-count'] as const,
+  },
+
+  userStats: () => ['users', 'me', 'stats'] as const,
 }

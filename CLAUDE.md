@@ -14,11 +14,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 3 — Task Management | Task CRUD, filtering, comments, RBAC polish (`My Tasks` deferred → Phase 5) | ✅ Done |
 | 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | ✅ Done |
 | 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | ✅ Done |
-| 6 — Docker & Deploy | Dockerize, AWS EC2 | 🔜 **Next** |
+| 6 — Dashboard & Notifications | Real Dashboard stats, Notification system | ✅ Done |
+| 7 — Docker & Deploy | Dockerize, CI/CD, AWS EC2 | 🔜 **Next** |
 
-**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments) → V9 (sprints + tasks.sprint_id FK).
+**DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments) → V9 (sprints + tasks.sprint_id FK) → V10 (notifications).
 
-**Current focus**: Phase 6 — Docker & Deployment.
+**Current focus**: Phase 7 — Docker & Deploy.
+
+**Phase 6 completed**: Real dashboard stats (`GET /api/v1/users/me/stats` → `UserStatsResponse { activeTaskCount, overdueTaskCount, doneTaskCount }`) via 3 JPQL count queries in `TaskRepository` (SQLRestriction handles soft-delete automatically). Dashboard rewritten with `useDashboardStats` hook (`staleTime: 0, refetchInterval: 60_000`), Upcoming Tasks panel (`useMyTasks` top 5 by due date), and enabled Quick Actions. Full notification system: V10 migration (`notifications` table, partial index on `is_read = FALSE`), `Notification` entity (does NOT extend `BaseEntity`, uses `@Builder.Default` for `read = false`), `NotificationService` hooked into `TaskService.assignTask()`, `CommentService.addComment()`, `SprintService.startSprint()/completeSprint()`, `ProjectService.addProjectMember()` — all hooks wrapped in try/catch so notification failure never rolls back parent transaction. Self-notification prevention at each hook. REST API: `GET/PATCH /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/{id}/read` (ownership check throws `ForbiddenException`), `PATCH /notifications/read-all`. Frontend: bell icon in sidebar with red badge (polling 30s, "99+" cap), `/notifications` page with All/Unread filter toggle (URL param `?filter=unread`), pagination, "Mark all as read", click navigates to `/tasks?taskId=X` or `/projects/{id}[?tab=sprints]`.
+
+**Phase 6 post-testing fixes**: Five bugs fixed. (1) **Notification bell position** — moved inside `<nav>` in `AppLayout.tsx`, below My Tasks nav item. (2) **Workspace add-member notification** — added `WORKSPACE_MEMBER_ADDED` to `NotificationType` + `WORKSPACE` to `NotificationEntityType` enums; `WorkspaceService.addMember()` now hooks notification with try/catch; frontend notification types + `NotificationItem` icon and navigation updated. (3) **Workspace member removal cascade** — `WorkspaceService.removeMember()` now: (a) guards with `countProjectsWhereUserIsLastManager()` (throws `WS_005` 409 if target is sole MANAGER of any project), (b) calls `taskRepository.unassignUserFromWorkspaceTasks()` to null-out assignee across the workspace, (c) calls `projectMemberRepository.deleteByUserIdAndWorkspaceId()` to cascade project memberships, then removes workspace membership. `removeWorkspaceMember` mutation also invalidates `task.all` + `task.mine()`. (4) **Task assignee inconsistency** — `ProjectService.removeProjectMember()` now calls `taskRepository.unassignUserFromProjectTasks()` before deleting the membership; `TaskDetailPanel` injects a ghost `<option>` for the current assignee when they're no longer in the members list; `removeProjectMember` mutation invalidates `task.byProject` + `task.mine()`. (5) **Dashboard task distribution chart** — `UserStatsResponse` extended with `todoCount`, `inProgressCount`, `inReviewCount`; `UserService.getMyStats()` populates them from 3 new `TaskRepository` JPQL count queries; new `TaskStatusChart` recharts donut component added between stats row and bottom grid in `DashboardPage`.
 
 **Phase 5 completed**: Kanban board ("Board" tab in `ProjectDetailPage`) with `@dnd-kit` drag-and-drop status change, sprint selector and backlog filter in `TaskFilters`/`TaskList`, `BacklogSection` in Sprints tab with inline "Add to Sprint" per task, "View Board" button on ACTIVE sprint cards (routes to Board tab pre-filtered to that sprint), `GET /tasks/me` backend endpoint with `MyTaskSummaryResponse` (includes `projectName`), `MyTasksPage` at `/tasks` (cross-project assigned tasks, inline `TaskDetailPanel` overlay with per-task `useProject` role fetch), `isAccessibleByUser` JPA Specification for the `getMyTasks` query, `useChangeAnyTaskStatus` mutation hook for board DnD, `task.mine` query key added to cache invalidation matrix for all task/sprint mutations. `TaskFilterParams.size` max relaxed from 20 → 100 to support board `size=100` fetch. No new DB migrations needed.
 
@@ -218,6 +223,9 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `useProjectSprints(id, params)` | 0 | 15 000 ms |
 | `useSprint(id)` | 0 | 15 000 ms |
 | `useMyTasks(params)` | 0 | 15 000 ms |
+| `useNotifications(params)` | 0 | 30 000 ms |
+| `useUnreadNotificationCount()` | 0 | 30 000 ms |
+| `useDashboardStats()` | 0 | 60 000 ms |
 
 **403 handling — component level only** — When a workspace or project data fetch returns 403, the component renders an "access revoked" message and calls `navigate('/workspaces')` after 2 seconds via `useEffect`. The Axios interceptor does NOT handle 403 globally because mutation 403s (e.g. "insufficient role" on a form submit) must show inline errors instead of redirecting. All 403s share `code: "CMN_001"` — use HTTP status 403 alone to detect access-revoked in `WorkspaceDetailPage` and `ProjectDetailPage`.
 
@@ -230,12 +238,12 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `deleteWorkspace` | `workspace.lists()` |
 | `addWorkspaceMember` | `workspace.members(id)` + `workspace.detail(id)` |
 | `updateMemberRole` | `workspace.members(id)` + `workspace.detail(id)` |
-| `removeWorkspaceMember` | `workspace.members(id)` + `workspace.detail(id)` |
+| `removeWorkspaceMember` | `workspace.members(id)` + `workspace.detail(id)` + **`task.all`** + **`task.mine()`** |
 | `createProject` | `project.byWorkspace(workspaceId)` |
 | `updateProject` | `setQueryData project.detail(id)` + `project.byWorkspace(workspaceId)` |
 | `archiveProject` | `setQueryData project.detail(id)` + `project.byWorkspace(workspaceId)` |
 | `addProjectMember` | `project.members(id)` + `project.detail(id)` |
-| `removeProjectMember` | `project.members(id)` + `project.detail(id)` |
+| `removeProjectMember` | `project.members(id)` + `project.detail(id)` + **`task.byProject(projectId)`** + **`task.mine()`** |
 | `createTask` | `task.byProject(projectId)` + `task.mine()` |
 | `updateTask` | `setQueryData task.detail(id)` + `task.byProject(projectId)` + `task.mine()` |
 | `deleteTask` | `task.byProject(projectId)` + `task.mine()` |
@@ -252,6 +260,8 @@ public static Specification<Workspace> memberOfUser(UUID userId) {
 | `completeSprint` | `setQueryData sprint.detail(id)` + `sprint.byProject(projectId)` + **`task.all`** |
 | `addTaskToSprint` | `task.detail(taskId)` + `task.byProject(projectId)` + `task.mine()` |
 | `removeTaskFromSprint` | `task.detail(taskId)` + `task.byProject(projectId)` + `task.mine()` |
+| `markNotificationRead` | `notification.all` |
+| `markAllNotificationsRead` | `notification.all` |
 
 ---
 

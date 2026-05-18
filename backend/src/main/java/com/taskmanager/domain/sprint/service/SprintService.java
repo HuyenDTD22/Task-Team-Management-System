@@ -1,8 +1,11 @@
 package com.taskmanager.domain.sprint.service;
 
+import com.taskmanager.common.enums.NotificationEntityType;
+import com.taskmanager.common.enums.NotificationType;
 import com.taskmanager.common.enums.ProjectRole;
 import com.taskmanager.common.enums.SprintStatus;
 import com.taskmanager.common.enums.WorkspaceRole;
+import com.taskmanager.domain.notification.service.NotificationService;
 import com.taskmanager.common.response.PageResponse;
 import com.taskmanager.domain.project.entity.Project;
 import com.taskmanager.domain.project.entity.ProjectMember;
@@ -30,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -45,6 +49,7 @@ public class SprintService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final TaskRepository taskRepository;
     private final SprintMapper sprintMapper;
+    private final NotificationService notificationService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS =
             Set.of("name", "startDate", "endDate", "createdAt");
@@ -176,6 +181,11 @@ public class SprintService {
 
         sprint = sprintRepository.save(sprint);
         log.info("Sprint started: {} in project {} by user: {}", sprintId, projectId, currentUserId);
+
+        notifyProjectMembers(projectId, NotificationType.SPRINT_STARTED,
+                "Sprint started: " + sprint.getName(),
+                "A new sprint has started in your project");
+
         return sprintMapper.toResponse(sprint);
     }
 
@@ -200,6 +210,11 @@ public class SprintService {
 
         sprint = sprintRepository.save(sprint);
         log.info("Sprint completed: {} in project {} by user: {}", sprintId, projectId, currentUserId);
+
+        notifyProjectMembers(projectId, NotificationType.SPRINT_COMPLETED,
+                "Sprint completed: " + sprint.getName(),
+                "The sprint has been completed. Incomplete tasks moved to backlog");
+
         return sprintMapper.toResponse(sprint);
     }
 
@@ -301,6 +316,19 @@ public class SprintService {
         if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
             throw new BusinessException(ErrorCode.VALIDATION_ERROR,
                     "End date cannot be before start date");
+        }
+    }
+
+    private void notifyProjectMembers(UUID projectId, NotificationType type, String title, String message) {
+        try {
+            List<ProjectMember> members = projectMemberRepository.findByProjectIdWithUser(projectId);
+            for (ProjectMember member : members) {
+                notificationService.createNotification(
+                        member.getUser().getId(), type, title, message,
+                        NotificationEntityType.PROJECT, projectId);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to create {} notifications for project {}: {}", type, projectId, ex.getMessage());
         }
     }
 }

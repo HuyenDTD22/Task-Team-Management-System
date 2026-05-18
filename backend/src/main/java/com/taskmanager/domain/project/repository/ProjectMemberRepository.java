@@ -3,7 +3,9 @@ package com.taskmanager.domain.project.repository;
 import com.taskmanager.common.enums.ProjectRole;
 import com.taskmanager.domain.project.entity.ProjectMember;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -40,6 +42,23 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, UU
             GROUP BY pm.project.id
             """)
     List<MemberCountView> countMembersByProjectIds(List<UUID> projectIds);
+
+    // Fix 3: guard — count projects in workspace where user is the sole MANAGER
+    @Query("""
+            SELECT COUNT(DISTINCT pm.project.id) FROM ProjectMember pm
+            WHERE pm.user.id = :userId
+            AND pm.role = com.taskmanager.common.enums.ProjectRole.MANAGER
+            AND pm.project.id IN (SELECT p.id FROM Project p WHERE p.workspace.id = :workspaceId AND p.deletedAt IS NULL)
+            AND 1 = (SELECT COUNT(pm2) FROM ProjectMember pm2
+                     WHERE pm2.project.id = pm.project.id
+                     AND pm2.role = com.taskmanager.common.enums.ProjectRole.MANAGER)
+            """)
+    long countProjectsWhereUserIsLastManager(@Param("userId") UUID userId, @Param("workspaceId") UUID workspaceId);
+
+    // Fix 3: cascade — remove user from all projects in the workspace
+    @Modifying
+    @Query("DELETE FROM ProjectMember pm WHERE pm.user.id = :userId AND pm.project.id IN (SELECT p.id FROM Project p WHERE p.workspace.id = :workspaceId AND p.deletedAt IS NULL)")
+    int deleteByUserIdAndWorkspaceId(@Param("userId") UUID userId, @Param("workspaceId") UUID workspaceId);
 
     // ─── Projection ─────────────────────────────────────────────────────────────
 

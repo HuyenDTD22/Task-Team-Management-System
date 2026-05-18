@@ -16,6 +16,9 @@ import com.taskmanager.domain.user.entity.User;
 import com.taskmanager.domain.user.repository.UserRepository;
 import com.taskmanager.domain.workspace.entity.WorkspaceMember;
 import com.taskmanager.domain.workspace.repository.WorkspaceMemberRepository;
+import com.taskmanager.domain.notification.service.NotificationService;
+import com.taskmanager.common.enums.NotificationEntityType;
+import com.taskmanager.common.enums.NotificationType;
 import com.taskmanager.exception.ErrorCode;
 import com.taskmanager.exception.ForbiddenException;
 import com.taskmanager.exception.ResourceNotFoundException;
@@ -47,6 +50,7 @@ public class TaskService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final TaskMapper taskMapper;
+    private final NotificationService notificationService;
 
     private static final Set<String> ALLOWED_SORT_FIELDS =
             Set.of("title", "status", "priority", "dueDate", "createdAt", "updatedAt");
@@ -329,6 +333,23 @@ public class TaskService {
                 : null;
         task.setAssignee(newAssignee);
         taskRepository.save(task);
+
+        // Notify the new assignee (skip if assigning to self or unassigning)
+        UUID newAssigneeId = request.getAssigneeId();
+        if (newAssigneeId != null && !newAssigneeId.equals(currentUserId)) {
+            try {
+                notificationService.createNotification(
+                        newAssigneeId,
+                        NotificationType.TASK_ASSIGNED,
+                        "You have been assigned a task",
+                        "Task: " + task.getTitle(),
+                        NotificationEntityType.TASK,
+                        task.getId());
+            } catch (Exception ex) {
+                log.warn("Failed to create TASK_ASSIGNED notification for task {}: {}", task.getId(), ex.getMessage());
+            }
+        }
+
         return buildTaskResponse(task);
     }
 

@@ -68,6 +68,8 @@ export function useRemoveWorkspaceMember(workspaceId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.members(workspaceId) })
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.detail(workspaceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.task.mine() })
     },
   })
 }

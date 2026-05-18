@@ -13,6 +13,7 @@ import { WorkspacesPage } from '@/features/workspace/pages/WorkspacesPage'
 import { WorkspaceDetailPage } from '@/features/workspace/pages/WorkspaceDetailPage'
 import { ProjectDetailPage } from '@/features/project/pages/ProjectDetailPage'
 import { MyTasksPage } from '@/features/task/pages/MyTasksPage'
+import { NotificationsPage } from '@/features/notification/pages/NotificationsPage'
 
 export const router = createBrowserRouter([
   { path: '/',          element: <LandingPage /> },
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
           { path: 'workspaces/:id', element: <WorkspaceDetailPage /> },
           { path: 'projects/:id',   element: <ProjectDetailPage /> },
           { path: 'tasks',          element: <MyTasksPage /> },
+          { path: 'notifications',  element: <NotificationsPage /> },
           { path: 'profile',        element: <ProfilePage /> },
           { path: 'profile/edit',   element: <EditProfilePage /> },
           { path: 'settings',       element: <SettingsPage /> },

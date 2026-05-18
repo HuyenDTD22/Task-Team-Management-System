@@ -5,6 +5,7 @@ import com.taskmanager.common.response.ApiResponse;
 import com.taskmanager.domain.user.dto.ChangePasswordRequest;
 import com.taskmanager.domain.user.dto.UpdateProfileRequest;
 import com.taskmanager.domain.user.dto.UserResponse;
+import com.taskmanager.domain.user.dto.UserStatsResponse;
 import com.taskmanager.domain.user.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -31,6 +32,11 @@ public class UserController {
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getMe() {
         return ResponseEntity.ok(ApiResponse.success(userService.getCurrentUserProfile()));
+    }
+
+    @GetMapping("/me/stats")
+    public ResponseEntity<ApiResponse<UserStatsResponse>> getMyStats() {
+        return ResponseEntity.ok(ApiResponse.success(userService.getMyStats()));
     }
 
     @PatchMapping("/me")

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { useLogout } from '@/features/auth/hooks/useLogout'
 import { Avatar } from '@/components/ui/Avatar'
+import { useUnreadNotificationCount } from '@/features/notification/hooks/useNotificationQueries'
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ function ClipboardListIcon() {
   )
 }
 
-function ChevronUpIcon({ open }: { open: boolean }) {
+function ChevronUpIcon({ open }: Readonly<{ open: boolean }>) {
   return (
     <svg
       className={`h-4 w-4 text-slate-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
@@ -84,7 +85,7 @@ interface SidebarItem {
   comingSoon?: boolean
 }
 
-function NavItem({ path, label, icon, comingSoon = false }: SidebarItem) {
+function NavItem({ path, label, icon, comingSoon = false }: Readonly<SidebarItem>) {
   if (comingSoon) {
     return (
       <div className="flex cursor-not-allowed select-none items-center gap-3 rounded-lg px-3 py-2.5 text-slate-500">
@@ -119,6 +120,46 @@ const NAV_MAIN: SidebarItem[] = [
   { path: '/workspaces', label: 'Workspaces', icon: <FolderIcon /> },
   { path: '/tasks',      label: 'My Tasks',   icon: <ClipboardListIcon /> },
 ]
+
+// ── Notification bell ─────────────────────────────────────────────────────────
+
+function formatUnreadCount(count: number): string | null {
+  if (count > 99) return '99+'
+  if (count > 0) return String(count)
+  return null
+}
+
+function NotificationBell() {
+  const { data: count = 0 } = useUnreadNotificationCount()
+  const display = formatUnreadCount(count)
+
+  return (
+    <div className="mt-0.5">
+      <NavLink
+        to="/notifications"
+        className={({ isActive }) =>
+          `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
+            isActive
+              ? 'bg-indigo-600 text-white'
+              : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+          }`
+        }
+      >
+        <span className="relative flex h-5 w-5 shrink-0">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+          </svg>
+          {display && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-0.5 text-[10px] font-bold leading-none text-white">
+              {display}
+            </span>
+          )}
+        </span>
+        {' Notifications'}
+      </NavLink>
+    </div>
+  )
+}
 
 // ── User dropdown ─────────────────────────────────────────────────────────────
 
@@ -244,7 +285,7 @@ export function AppLayout() {
           <div className="space-y-0.5">
             {NAV_MAIN.map((item) => <NavItem key={item.path} {...item} />)}
           </div>
-
+          <NotificationBell />
         </nav>
 
         {/* User section with dropdown */}

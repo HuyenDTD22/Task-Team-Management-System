@@ -3,9 +3,11 @@ package com.taskmanager.domain.user.service;
 import com.taskmanager.common.upload.CloudinaryService;
 import com.taskmanager.common.upload.CloudinaryUploadResult;
 import com.taskmanager.domain.auth.repository.RefreshTokenRepository;
+import com.taskmanager.domain.task.repository.TaskRepository;
 import com.taskmanager.domain.user.dto.ChangePasswordRequest;
 import com.taskmanager.domain.user.dto.UpdateProfileRequest;
 import com.taskmanager.domain.user.dto.UserResponse;
+import com.taskmanager.domain.user.dto.UserStatsResponse;
 import com.taskmanager.domain.user.entity.User;
 import com.taskmanager.domain.user.mapper.UserMapper;
 import com.taskmanager.domain.user.repository.UserRepository;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -33,6 +36,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final CloudinaryService cloudinaryService;
+    private final TaskRepository taskRepository;
 
     @Transactional(readOnly = true)
     public UserResponse getCurrentUserProfile() {
@@ -90,6 +94,19 @@ public class UserService {
 
         refreshTokenRepository.revokeAllByUserId(user.getId(), Instant.now());
         log.info("Password changed for user: {}. All sessions revoked.", user.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public UserStatsResponse getMyStats() {
+        UUID userId = SecurityUtil.getCurrentUserId();
+        return UserStatsResponse.builder()
+                .activeTaskCount(taskRepository.countActiveTasksForUser(userId))
+                .overdueTaskCount(taskRepository.countOverdueTasksForUser(userId))
+                .doneTaskCount(taskRepository.countDoneTasksForUser(userId))
+                .todoCount(taskRepository.countTodoTasksForUser(userId))
+                .inProgressCount(taskRepository.countInProgressTasksForUser(userId))
+                .inReviewCount(taskRepository.countInReviewTasksForUser(userId))
+                .build();
     }
 
     @Transactional(readOnly = true)

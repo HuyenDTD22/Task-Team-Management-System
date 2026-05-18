@@ -1,8 +1,11 @@
 package com.taskmanager.domain.project.service;
 
+import com.taskmanager.common.enums.NotificationEntityType;
+import com.taskmanager.common.enums.NotificationType;
 import com.taskmanager.common.enums.ProjectRole;
 import com.taskmanager.common.enums.ProjectStatus;
 import com.taskmanager.common.enums.WorkspaceRole;
+import com.taskmanager.domain.notification.service.NotificationService;
 import com.taskmanager.common.response.PageResponse;
 import com.taskmanager.domain.project.dto.*;
 import com.taskmanager.domain.project.entity.Project;
@@ -16,6 +19,7 @@ import com.taskmanager.domain.user.repository.UserRepository;
 import com.taskmanager.domain.workspace.entity.Workspace;
 import com.taskmanager.domain.workspace.entity.WorkspaceMember;
 import com.taskmanager.domain.workspace.repository.WorkspaceMemberRepository;
+import com.taskmanager.domain.task.repository.TaskRepository;
 import com.taskmanager.domain.workspace.repository.WorkspaceRepository;
 import com.taskmanager.exception.*;
 import com.taskmanager.security.SecurityUtil;
@@ -49,6 +53,8 @@ public class ProjectService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final ProjectMapper projectMapper;
+    private final NotificationService notificationService;
+    private final TaskRepository taskRepository;
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("name", "createdAt", "updatedAt");
 
@@ -231,6 +237,20 @@ public class ProjectService {
         member.setJoinedAt(Instant.now());
         projectMemberRepository.save(member);
 
+        // Notify the added user
+        try {
+            notificationService.createNotification(
+                    request.getUserId(),
+                    NotificationType.PROJECT_MEMBER_ADDED,
+                    "You have been added to a project",
+                    "You are now a " + request.getRole().name() + " in project: " + project.getName(),
+                    NotificationEntityType.PROJECT,
+                    projectId);
+        } catch (Exception ex) {
+            log.warn("Failed to create PROJECT_MEMBER_ADDED notification for user {} in project {}: {}",
+                    request.getUserId(), projectId, ex.getMessage());
+        }
+
         log.info("Member {} added to project {} by user: {}", request.getUserId(), projectId, currentUserId);
         return projectMapper.toMemberResponse(member);
     }
@@ -250,6 +270,7 @@ public class ProjectService {
             throw new ForbiddenException("Cannot remove the last MANAGER from a project");
         }
 
+        taskRepository.unassignUserFromProjectTasks(targetUserId, projectId);
         projectMemberRepository.deleteByProjectIdAndUserId(projectId, targetUserId);
     }
 

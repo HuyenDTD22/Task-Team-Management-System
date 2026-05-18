@@ -3,6 +3,7 @@ package com.taskmanager.domain.task.repository;
 import com.taskmanager.domain.task.entity.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -33,4 +34,33 @@ public interface TaskRepository extends JpaRepository<Task, UUID>, JpaSpecificat
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE Task t SET t.sprintId = null WHERE t.sprintId = :sprintId")
     int clearAllSprintTasks(@Param("sprintId") UUID sprintId);
+
+    // Dashboard stats — count queries scoped to a specific user (deleted_at filter applied by @SQLRestriction)
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.status <> com.taskmanager.common.enums.TaskStatus.DONE")
+    long countActiveTasksForUser(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.dueDate < CURRENT_DATE AND t.status <> com.taskmanager.common.enums.TaskStatus.DONE")
+    long countOverdueTasksForUser(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.status = com.taskmanager.common.enums.TaskStatus.DONE")
+    long countDoneTasksForUser(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.status = com.taskmanager.common.enums.TaskStatus.TODO")
+    long countTodoTasksForUser(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.status = com.taskmanager.common.enums.TaskStatus.IN_PROGRESS")
+    long countInProgressTasksForUser(@Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(t) FROM Task t WHERE t.assignee.id = :userId AND t.status = com.taskmanager.common.enums.TaskStatus.IN_REVIEW")
+    long countInReviewTasksForUser(@Param("userId") UUID userId);
+
+    // Fix 4: unassign tasks in a project when project member is removed
+    @Modifying
+    @Query("UPDATE Task t SET t.assignee = null WHERE t.assignee.id = :userId AND t.projectId = :projectId")
+    int unassignUserFromProjectTasks(@Param("userId") UUID userId, @Param("projectId") UUID projectId);
+
+    // Fix 3: unassign tasks across workspace when workspace member is removed (cascade)
+    @Modifying
+    @Query("UPDATE Task t SET t.assignee = null WHERE t.assignee.id = :userId AND t.projectId IN (SELECT p.id FROM Project p WHERE p.workspace.id = :workspaceId AND p.deletedAt IS NULL)")
+    int unassignUserFromWorkspaceTasks(@Param("userId") UUID userId, @Param("workspaceId") UUID workspaceId);
 }

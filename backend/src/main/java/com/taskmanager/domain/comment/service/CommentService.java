@@ -1,7 +1,10 @@
 package com.taskmanager.domain.comment.service;
 
+import com.taskmanager.common.enums.NotificationEntityType;
+import com.taskmanager.common.enums.NotificationType;
 import com.taskmanager.common.enums.ProjectRole;
 import com.taskmanager.common.enums.WorkspaceRole;
+import com.taskmanager.domain.notification.service.NotificationService;
 import com.taskmanager.common.response.PageResponse;
 import com.taskmanager.domain.comment.dto.*;
 import com.taskmanager.domain.comment.entity.Comment;
@@ -47,6 +50,7 @@ public class CommentService {
     private final WorkspaceMemberRepository workspaceMemberRepository;
     private final UserRepository userRepository;
     private final CommentMapper commentMapper;
+    private final NotificationService notificationService;
 
     // ─── Add comment ─────────────────────────────────────────────────────────────
 
@@ -79,8 +83,29 @@ public class CommentService {
         User fullAuthor = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException(ErrorCode.USER_NOT_FOUND));
 
+        // Notify the task assignee if they are not the one commenting
+        UUID assigneeId = task.getAssigneeId();
+        if (assigneeId != null && !assigneeId.equals(currentUserId)) {
+            try {
+                notificationService.createNotification(
+                        assigneeId,
+                        NotificationType.COMMENT_ADDED,
+                        "New comment on your task",
+                        fullAuthor.getFullName() + " commented: " + truncate(request.getContent(), 80),
+                        NotificationEntityType.TASK,
+                        taskId);
+            } catch (Exception ex) {
+                log.warn("Failed to create COMMENT_ADDED notification for task {}: {}", taskId, ex.getMessage());
+            }
+        }
+
         log.info("Comment added to task {} by user: {}", taskId, currentUserId);
         return commentMapper.toResponse(comment, fullAuthor);
+    }
+
+    private String truncate(String text, int maxLength) {
+        if (text == null) return "";
+        return text.length() <= maxLength ? text : text.substring(0, maxLength) + "…";
     }
 
     // ─── List comments ───────────────────────────────────────────────────────────

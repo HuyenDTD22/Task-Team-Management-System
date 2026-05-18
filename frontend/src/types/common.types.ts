@@ -63,3 +63,16 @@ export interface TaskFilterParams extends PageParams {
 export interface SprintFilterParams extends PageParams {
   status?: SprintStatus
 }
+
+export interface NotificationFilterParams extends PageParams {
+  isRead?: boolean
+}
+
+export interface UserStatsResponse {
+  activeTaskCount: number
+  overdueTaskCount: number
+  doneTaskCount: number
+  todoCount: number
+  inProgressCount: number
+  inReviewCount: number
+}
