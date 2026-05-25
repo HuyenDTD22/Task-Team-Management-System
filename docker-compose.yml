@@ -1,0 +1,101 @@
+# ─── Production Docker Compose ────────────────────────────────────────────────
+# Usage: docker compose up -d
+# Prerequisite: .env file (copy from .env.example và điền giá trị thật)
+#
+# Services:
+#   postgres  — PostgreSQL 16 (internal only, không expose port ra ngoài)
+#   backend   — Spring Boot JAR (internal port 8080)
+#   frontend  — Nginx serving React build (internal port 80)
+#   nginx     — Reverse proxy, port 80 PUBLIC (duy nhất service expose)
+
+services:
+
+  # ── PostgreSQL 16 ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskmanager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - task-manager-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Không expose port — PostgreSQL chỉ accessible từ trong network
+
+  # ── Spring Boot Backend (pre-built GHCR image) ────────────────────────────────
+  backend:
+    image: ghcr.io/${GHCR_USERNAME}/task-team-management-system/backend:${IMAGE_TAG:-latest}
+    container_name: taskmanager-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE:      prod
+      SPRING_DATASOURCE_URL:       jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME:  ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD:  ${POSTGRES_PASSWORD}
+      JWT_SECRET:                  ${JWT_SECRET}
+      CLOUDINARY_CLOUD_NAME:       ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY:          ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET:       ${CLOUDINARY_API_SECRET}
+      FRONTEND_URL:                ${FRONTEND_URL}
+      # FIX: AppProperties.cookieSecure defaults to true.
+      # Khi deploy HTTP (không HTTPS), cookie Secure=true bị browser chặn
+      # → refresh_token cookie không gửi được → login/refresh bị lỗi.
+      # Spring relaxed binding: APP_COOKIE_SECURE → app.cookie-secure
+      APP_COOKIE_SECURE:           "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - task-manager-network
+    # Không expose port — chỉ nginx proxy /api/* đến backend
+    # Healthcheck kế thừa từ backend/Dockerfile (wget /api/v1/actuator/health)
+
+  # ── React Frontend (pre-built GHCR image) ─────────────────────────────────────
+  frontend:
+    image: ghcr.io/${GHCR_USERNAME}/task-team-management-system/frontend:${IMAGE_TAG:-latest}
+    container_name: taskmanager-frontend
+    restart: unless-stopped
+    networks:
+      - task-manager-network
+    # Không expose port — chỉ nginx proxy / đến frontend
+
+  # ── Nginx Reverse Proxy (duy nhất expose port ra Internet) ───────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: taskmanager-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      # Mount vào conf.d/ — nginx alpine đọc include /etc/nginx/conf.d/*.conf
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - task-manager-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/api/v1/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+
+# ── Bridge network (tất cả 4 services giao tiếp qua đây) ─────────────────────
+networks:
+  task-manager-network:
+    driver: bridge

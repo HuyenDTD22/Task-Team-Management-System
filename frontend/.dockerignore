@@ -1,0 +1,31 @@
+# ── Dependencies (always reinstalled inside Docker via npm ci) ────────────────
+node_modules/
+
+# ── Build output (rebuilt inside Docker) ─────────────────────────────────────
+dist/
+dist-ssr/
+
+# ── Environment files (never bake secrets into image) ────────────────────────
+.env
+.env.*
+*.local
+
+# ── Version control ───────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Editor/IDE artifacts ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.sw?
+.DS_Store
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── Test/CI files not needed in production image ──────────────────────────────
+*.test.*
+*.spec.*
+coverage/

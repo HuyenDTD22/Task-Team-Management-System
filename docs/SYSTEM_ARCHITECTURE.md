@@ -1,6 +1,6 @@
 # System Architecture — Task & Team Management System
 
-> Version: 1.1 | Last updated: 2026-05-16
+> Version: 1.2 | Last updated: 2026-05-23
 
 ---
 
@@ -620,71 +620,85 @@ Replace polling with a real-time push channel. Planned events and their query in
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                    Docker Compose Network                         │
-│                  (task-manager-network)                           │
+│                  (task-manager-network bridge)                    │
 │                                                                  │
 │  ┌─────────────────┐   ┌────────────────┐   ┌───────────────┐   │
 │  │     nginx       │   │    backend     │   │   frontend    │   │
-│  │  80:80, 443:443 │   │    8080:8080   │   │   3000:3000   │   │
-│  │  nginx:alpine   │   │  openjdk:21    │   │  node:20-alp  │   │
+│  │  80:80 (public) │   │  :8080 (intern)│   │ :80 (intern)  │   │
+│  │ nginx:1.27-alp  │   │ GHCR image     │   │ GHCR image    │   │
 │  └────────┬────────┘   └────────┬───────┘   └───────────────┘   │
 │           │                     │                                 │
 │           └────────────────┬────┘                                 │
 │                            ▼                                      │
 │                  ┌─────────────────┐                              │
 │                  │    postgres     │                              │
-│                  │  5432 (internal)│                              │
+│                  │  :5432 (intern) │                              │
 │                  │  postgres:16    │                              │
 │                  └─────────────────┘                              │
 │                                                                  │
-│  Volumes: postgres_data, nginx_certs                              │
+│  Volumes: postgres_data (persistent DB data)                      │
+│  Only nginx exposes a port externally (80).                       │
+│  Backend, frontend, postgres: internal network only.              │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Docker Compose Structure
+**Image strategy**: Backend và frontend dùng **pre-built images từ GHCR** (không build trên server). CI/CD pipeline build + push images; EC2 chỉ pull và run.
+
+| Service | Image | Port |
+|---------|-------|------|
+| `postgres` | `postgres:16-alpine` | 5432 (internal only) |
+| `backend` | `ghcr.io/{owner}/task-team-management-system/backend:latest` | 8080 (internal only) |
+| `frontend` | `ghcr.io/{owner}/task-team-management-system/frontend:latest` | 80 (internal only) |
+| `nginx` | `nginx:1.27-alpine` | **80 (external)** |
+
+### 5.2 Docker Compose Structure (`docker-compose.yml`)
 
 ```yaml
-# docker-compose.yml (dev)
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: taskmanager
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - task-manager-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ghcr.io/${GHCR_USERNAME}/task-team-management-system/backend:${IMAGE_TAG:-latest}
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/taskmanager
-      SPRING_DATASOURCE_USERNAME: ${DB_USERNAME}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      SPRING_PROFILES_ACTIVE:     prod
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET:                 ${JWT_SECRET}
+      CLOUDINARY_CLOUD_NAME:      ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY:         ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET:      ${CLOUDINARY_API_SECRET}
+      FRONTEND_URL:               ${FRONTEND_URL}
+      # Fix: AppProperties.cookieSecure defaults true → breaks HTTP cookies
+      APP_COOKIE_SECURE:          "false"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - task-manager-network
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/${GHCR_USERNAME}/task-team-management-system/frontend:${IMAGE_TAG:-latest}
     networks:
       - task-manager-network
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "80:80"            # Duy nhất service expose port ra ngoài
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
-      - nginx_certs:/etc/nginx/certs
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - frontend
       - backend
@@ -693,48 +707,68 @@ services:
 
 volumes:
   postgres_data:
-  nginx_certs:
 
 networks:
   task-manager-network:
     driver: bridge
 ```
 
-### 5.3 Nginx Reverse Proxy Config
+**Rollback**: `IMAGE_TAG=sha-abc1234 docker compose up -d --remove-orphans`
+
+### 5.3 Nginx Reverse Proxy Config (`nginx/nginx.conf`)
+
+Key design decisions:
+- `server_name _` — accept any IP/hostname (EC2 IP-only, no domain)
+- `proxy_pass_header Set-Cookie` + `proxy_cookie_path /api/v1/auth /api/v1/auth` — HttpOnly refresh token cookie pass-through từ backend đến browser
+- `client_max_body_size 6m` — match `application.yml` multipart limit (Cloudinary uploads)
 
 ```nginx
-# nginx/nginx.conf
-upstream frontend {
-    server frontend:3000;
-}
-
-upstream backend {
-    server backend:8080;
-}
+upstream backend  { server backend:8080;  keepalive 32; }
+upstream frontend { server frontend:80;   keepalive 16; }
 
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name _;   # Accept any hostname / EC2 IP
 
-    # Redirect HTTP to HTTPS (production)
-    # return 301 https://$host$request_uri;
+    gzip on; gzip_types text/css application/javascript application/json;
+    client_max_body_size 6m;
 
-    # Frontend
-    location / {
-        proxy_pass http://frontend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
+    location /api/ {
+        proxy_pass         http://backend;
+        proxy_pass_header  Set-Cookie;
+        proxy_cookie_path  /api/v1/auth  /api/v1/auth;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    # Backend API
-    location /api/ {
-        proxy_pass http://backend;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    location = /api/v1/actuator/health {
+        proxy_pass  http://backend/api/v1/actuator/health;
+        access_log  off;   # No log spam from Docker healthchecks
+    }
+
+    location / {
+        proxy_pass         http://frontend;
+        proxy_set_header   Host $host;
     }
 }
 ```
+
+### 5.4 Frontend Docker Build (`frontend/Dockerfile`)
+
+Multi-stage để giảm image size — chỉ build artifacts cuối cùng trong runtime image:
+
+```
+Stage 1 (builder): node:20-alpine
+  npm ci && npm run build → /app/dist/
+
+Stage 2 (runtime): nginx:alpine
+  COPY dist/ → /usr/share/nginx/html/
+  COPY nginx.conf → /etc/nginx/conf.d/default.conf
+  (SPA routing: try_files $uri $uri/ /index.html)
+```
+
+Backend Dockerfile (`backend/Dockerfile`) đã có từ Phase 0: `eclipse-temurin:21-jdk` (build) → `eclipse-temurin:21-jre-alpine` (runtime), non-root user `appuser:appgroup`.
 
 ---
 
@@ -742,34 +776,107 @@ server {
 
 ```
                     ┌─────────────────────────────┐
-                    │         Route 53 (DNS)       │
-                    │  yourdomain.com → EC2 IP     │
+                    │         Internet             │
+                    │   http://<EC2_PUBLIC_IP>     │
                     └─────────────┬───────────────┘
-                                  │
-                    ┌─────────────▼───────────────┐
-                    │     Internet Gateway         │
-                    └─────────────┬───────────────┘
-                                  │
+                                  │ port 80 (HTTP)
 ┌─────────────────────────────────▼──────────────────────────────┐
 │                      AWS EC2 Instance                           │
 │                   Ubuntu 22.04 LTS                              │
-│                   t3.small (2vCPU, 2GB RAM)                     │
+│                   t3.small (2vCPU, 2GB RAM, 20GB SSD)           │
 │                                                                 │
-│  Security Group:                                                 │
-│    Inbound: 22 (SSH), 80 (HTTP), 443 (HTTPS)                    │
-│    Outbound: All                                                 │
+│  Security Group Inbound Rules:                                  │
+│    22  (SSH)  — My IP only                                      │
+│    80  (HTTP) — 0.0.0.0/0                                       │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                Docker Engine                             │   │
+│  │  Docker Engine + Compose plugin                          │   │
 │  │                                                          │   │
-│  │  nginx → frontend → backend → postgres                   │   │
+│  │  nginx:80 → frontend:80 (static React)                   │   │
+│  │  nginx:80 → backend:8080 (Spring Boot)                   │   │
+│  │  backend  → postgres:5432                                │   │
 │  └──────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Images pulled from GHCR on each CI/CD deploy.                  │
+│  PostgreSQL data persisted in named volume: postgres_data.      │
 └────────────────────────────────────────────────────────────────┘
+```
+
+**Access**: `http://<EC2_PUBLIC_IP>` — HTTP only. HTTPS có thể thêm sau bằng Certbot Let's Encrypt nếu có domain (update `APP_COOKIE_SECURE` sang `true` khi có HTTPS).
+
+**Xem DEPLOYMENT.md** để hướng dẫn setup EC2 từ đầu đến cuối.
+
+---
+
+## 7. CI/CD Pipeline (GitHub Actions)
+
+### 7.1 Pipeline Overview
+
+File: `.github/workflows/ci-cd.yml`
+
+```
+Push to main / PR to main
+         │
+         ▼
+┌────────────────────┐
+│   JOB 1: test      │  ← Chạy trên PR lẫn push main
+│  PostgreSQL service│
+│  container         │
+│  mvn test          │
+└────────┬───────────┘
+         │ only on push main
+         ▼
+┌────────────────────┐
+│ JOB 2: build-push  │
+│ Docker Buildx      │
+│ Build backend img  │
+│ Build frontend img │
+│ Push to GHCR       │
+│ Tag: :sha-<7> + :latest│
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│  JOB 3: deploy     │
+│ SSH → EC2          │
+│ docker compose pull│
+│ docker compose up  │
+│ docker image prune │
+└────────────────────┘
+```
+
+### 7.2 Image Registry (GHCR)
+
+**GitHub Container Registry** — tích hợp trực tiếp với GitHub Actions, không cần tài khoản riêng.
+
+```
+ghcr.io/{github_owner}/task-team-management-system/backend:{tag}
+ghcr.io/{github_owner}/task-team-management-system/frontend:{tag}
+```
+
+Tags: `:sha-<7char>` (pinned version cho rollback) và `:latest` (auto-updated mỗi deploy).
+
+### 7.3 GitHub Secrets Required
+
+| Secret | Value |
+|--------|-------|
+| `EC2_HOST` | EC2 public IP address |
+| `EC2_SSH_KEY` | Full content của file `.pem` |
+| `GHCR_USERNAME` | GitHub username (dùng để `docker login` trên EC2) |
+
+`GITHUB_TOKEN` được tự động inject bởi GitHub — không cần thêm thủ công.
+
+### 7.4 Rollback Strategy
+
+```bash
+# Mỗi deploy tạo image với SHA tag (vd: sha-a1b2c3d)
+# Rollback: set IMAGE_TAG trong .env trên EC2 rồi recompose
+IMAGE_TAG=sha-a1b2c3d docker compose up -d --remove-orphans
 ```
 
 ---
 
-## 7. Environment Variable Strategy
+## 8. Environment Variable Strategy
 
 ### Dev vs Production separation:
 
@@ -805,7 +912,7 @@ jwt:
 
 ---
 
-## 8. Scalability Considerations
+## 9. Scalability Considerations
 
 ### Hệ thống hiện tại (Monolith — phù hợp với solo dev)
 - Một codebase duy nhất

@@ -15,11 +15,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | 4 — Sprint Management | Sprint lifecycle (PLANNED → ACTIVE → COMPLETED) | ✅ Done |
 | 5 — Frontend (advanced) | Kanban board, drag-and-drop, sprint UI, My Tasks personal view | ✅ Done |
 | 6 — Dashboard & Notifications | Real Dashboard stats, Notification system | ✅ Done |
-| 7 — Docker & Deploy | Dockerize, CI/CD, AWS EC2 | 🔜 **Next** |
+| 7 — Docker & Deploy | Dockerize, CI/CD, AWS EC2 | ✅ Done |
 
 **DB migrations applied**: V1 (users) → V2 (refresh_tokens) → V3 (avatar_public_id) → V4 (workspaces + workspace_members) → V5 (projects + project_members) → V6 (tasks) → V7 (comments) → V8 (comment parent_id for threaded comments) → V9 (sprints + tasks.sprint_id FK) → V10 (notifications).
 
-**Current focus**: Phase 7 — Docker & Deploy.
+**Current focus**: Project complete — tất cả 8 phase (0–7) đã hoàn tất. Xem [DEPLOYMENT.md](DEPLOYMENT.md) để deploy lên EC2.
+
+**Phase 7 completed**: Full Docker production stack. 8 files mới được tạo:
+(1) **`frontend/Dockerfile`** — multi-stage (node:20-alpine build `dist/` → nginx:alpine serve). `npm ci` + `npm run build` → copy sang nginx image.
+(2) **`frontend/nginx.conf`** — SPA routing (`try_files $uri $uri/ /index.html`); cache hashed assets 1 năm (`immutable`), `index.html` no-cache để đảm bảo browser luôn lấy bản mới nhất sau deploy.
+(3) **`nginx/nginx.conf`** — reverse proxy: `/api/*` → `backend:8080`, `/` → `frontend:80`; `proxy_pass_header Set-Cookie` + `proxy_cookie_path /api/v1/auth /api/v1/auth` đảm bảo HttpOnly refresh token cookie đi qua đúng; gzip compression; security headers; `client_max_body_size 6m` match multipart limit.
+(4) **`docker-compose.yml`** — 4-service production stack; backend + frontend dùng pre-built GHCR images (`ghcr.io/${GHCR_USERNAME}/task-team-management-system/{backend|frontend}:${IMAGE_TAG:-latest}`); chỉ nginx expose port 80; postgres không expose port; `APP_COOKIE_SECURE: "false"` fix (xem critical fix bên dưới).
+(5) **`.env.example`** — template đầy đủ tất cả env vars, an toàn để commit.
+(6) **`frontend/.dockerignore`** — loại node_modules, dist, .env* khỏi image build context.
+(7) **`.github/workflows/ci-cd.yml`** — 3-job pipeline: `test` (PostgreSQL service container + `mvn test` với `-Dspring.datasource.*` override) → `build-and-push` (chỉ trên push `main`; build cả 2 images với GHA layer cache, tag `:sha-<7char>` + `:latest`, push GHCR) → `deploy` (`appleboy/ssh-action@v1` SSH vào EC2, `docker compose pull backend frontend && docker compose up -d --remove-orphans && docker image prune -f`).
+(8) **`DEPLOYMENT.md`** — hướng dẫn EC2 setup step-by-step: cài Docker, clone repo, tạo `.env`, first deploy, verify, rollback, backup DB, troubleshooting table.
+
+**Critical fix phát hiện trong Phase 7**: `AppProperties.java:14` có `cookieSecure = true` (default). Khi deploy HTTP (không HTTPS), browser chặn cookie có flag `Secure` → refresh token + login bị lỗi hoàn toàn. Fix: `APP_COOKIE_SECURE: "false"` trong backend service env của `docker-compose.yml` (Spring relaxed binding: `APP_COOKIE_SECURE` → `app.cookie-secure` → `AppProperties.cookieSecure`). **Không cần sửa Java code.**
+
+**GitHub Secrets cần thiết** (Settings → Secrets → Actions): `EC2_HOST` (EC2 public IP), `EC2_SSH_KEY` (nội dung file .pem), `GHCR_USERNAME` (GitHub username). `GITHUB_TOKEN` tự động inject — không cần thêm thủ công.
 
 **Phase 6 completed**: Real dashboard stats (`GET /api/v1/users/me/stats` → `UserStatsResponse { activeTaskCount, overdueTaskCount, doneTaskCount }`) via 3 JPQL count queries in `TaskRepository` (SQLRestriction handles soft-delete automatically). Dashboard rewritten with `useDashboardStats` hook (`staleTime: 0, refetchInterval: 60_000`), Upcoming Tasks panel (`useMyTasks` top 5 by due date), and enabled Quick Actions. Full notification system: V10 migration (`notifications` table, partial index on `is_read = FALSE`), `Notification` entity (does NOT extend `BaseEntity`, uses `@Builder.Default` for `read = false`), `NotificationService` hooked into `TaskService.assignTask()`, `CommentService.addComment()`, `SprintService.startSprint()/completeSprint()`, `ProjectService.addProjectMember()` — all hooks wrapped in try/catch so notification failure never rolls back parent transaction. Self-notification prevention at each hook. REST API: `GET/PATCH /notifications`, `GET /notifications/unread-count`, `PATCH /notifications/{id}/read` (ownership check throws `ForbiddenException`), `PATCH /notifications/read-all`. Frontend: bell icon in sidebar with red badge (polling 30s, "99+" cap), `/notifications` page with All/Unread filter toggle (URL param `?filter=unread`), pagination, "Mark all as read", click navigates to `/tasks?taskId=X` or `/projects/{id}[?tab=sprints]`.
 
@@ -51,6 +65,17 @@ docker compose -f docker-compose.dev.yml up -d
 ```
 This spins up PostgreSQL only. Backend and frontend run locally.
 
+### Production (Docker)
+```bash
+cp .env.example .env      # điền giá trị thật trước khi chạy
+docker compose up -d      # khởi động 4 services: postgres, backend, frontend, nginx
+docker compose logs -f    # theo dõi logs realtime
+docker compose ps         # kiểm tra trạng thái
+docker compose pull && docker compose up -d --remove-orphans  # redeploy với images mới
+docker compose down       # dừng stack
+```
+Requires `.env` file (copy từ `.env.example`). Backend và frontend dùng pre-built GHCR images. Xem [DEPLOYMENT.md](DEPLOYMENT.md) để hướng dẫn EC2 đầy đủ.
+
 ### Backend
 ```bash
 cd backend
@@ -78,9 +103,10 @@ Vite proxies `/api/*` → `http://localhost:8080`, so the frontend hits the loca
 
 ### Request lifecycle
 ```
-Browser → Vite (:5173) → proxy /api → Spring Boot (:8080) → PostgreSQL (:5432)
+Dev:        Browser → Vite (:5173) → proxy /api → Spring Boot (:8080) → PostgreSQL (:5432)
+Production: Browser → Nginx (:80)  → [/api/* → Spring Boot (:8080) | / → React nginx (:80)] → PostgreSQL (:5432)
 ```
-In production everything runs in Docker behind Nginx; Nginx routes `/api` to the backend container and `/` to the frontend container.
+Production chạy trong Docker Compose với 4 services trên `task-manager-network` bridge. Chỉ nginx expose port 80 ra ngoài; backend, frontend, postgres là internal only. Nginx config: `nginx/nginx.conf` (mount vào `/etc/nginx/conf.d/default.conf`). Frontend là static `dist/` được serve bởi nginx:alpine bên trong container.
 
 ### Backend package structure (`com.taskmanager`)
 ```
